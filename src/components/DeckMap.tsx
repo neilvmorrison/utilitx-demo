@@ -91,6 +91,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const [activePath, setActivePath] = useState<Node[]>([]);
   const [hoverCoord, setHoverCoord] = useState<[number, number] | null>(null);
   const [isSnapping, setIsSnapping] = useState(false);
+  // When isSnapping, tracks whether we're snapping to the first node of the
+  // active path (→ self-close polygon) or to a node on a completed path (→ connect).
+  const [snapIsFirstNode, setSnapIsFirstNode] = useState(false);
   const [activeColor, setActiveColor] = useState("#ff4a55");
   const [activeWidth, setActiveWidth] = useState(4);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -139,6 +142,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
           setActivePath([]);
           setHoverCoord(null);
           setIsSnapping(false);
+          setSnapIsFirstNode(false);
         } else {
           setEditingPathId(null);
           setSelectedNodeIds(new Set());
@@ -339,9 +343,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         })
       : null;
 
-  // Snap ring
+  // Snap ring — shown whenever isSnapping, centred on hoverCoord (the snap target)
   const snapRingLayer =
-    isSnapping && activePath.length >= 3
+    isSnapping && hoverCoord && activePath.length >= (snapIsFirstNode ? 3 : 2)
       ? new GeoJsonLayer({
           id: "snap-ring",
           data: {
@@ -351,7 +355,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
                 type: "Feature" as const,
                 geometry: {
                   type: "Point" as const,
-                  coordinates: activePath[0].coords,
+                  coordinates: hoverCoord,
                 },
                 properties: {},
               },
@@ -373,26 +377,34 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         })
       : null;
 
-  // Transparent fill preview when snapping to close
-  const closingPreviewLayer =
-    isSnapping && activePath.length >= 3
-      ? new GeoJsonLayer({
-          id: "closing-preview",
-          data: {
-            type: "FeatureCollection" as const,
-            features: [
-              {
-                type: "Feature" as const,
-                geometry: {
-                  type: "Polygon" as const,
-                  coordinates: [
-                    [...activePath.map((n) => n.coords), activePath[0].coords],
-                  ],
-                },
-                properties: {},
+  // Transparent fill preview when snapping to close or connect.
+  // For first-node snap: polygon loops back through activePath[0].
+  // For completed-path-node snap: polygon includes hoverCoord then closes to activePath[0].
+  const showClosingPreview =
+    isSnapping &&
+    hoverCoord &&
+    (snapIsFirstNode ? activePath.length >= 3 : activePath.length >= 2);
+  const closingPreviewCoords: [number, number][] = showClosingPreview
+    ? snapIsFirstNode
+      ? [...activePath.map((n) => n.coords), activePath[0].coords]
+      : [...activePath.map((n) => n.coords), hoverCoord, activePath[0].coords]
+    : [];
+  const closingPreviewLayer = showClosingPreview
+    ? new GeoJsonLayer({
+        id: "closing-preview",
+        data: {
+          type: "FeatureCollection" as const,
+          features: [
+            {
+              type: "Feature" as const,
+              geometry: {
+                type: "Polygon" as const,
+                coordinates: [closingPreviewCoords],
               },
-            ],
-          },
+              properties: {},
+            },
+          ],
+        },
           filled: true,
           getFillColor: [...hexToRgb(activeColor), 35] as [
             number,
@@ -555,8 +567,15 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
   function handleClick(info: PickingInfo, event?: { srcEvent?: MouseEvent }) {
     if (isDrawing) {
-      if (isSnapping && activePath.length >= 3) {
-        finishPath(true);
+      if (isSnapping && hoverCoord) {
+        if (snapIsFirstNode && activePath.length >= 3) {
+          // Self-close: loop back to first node, forming a polygon
+          finishPath(true);
+        } else if (activePath.length >= 1) {
+          // Connect to a node on an existing path — add snap coord as final node,
+          // then close as polygon if there will be ≥3 nodes total
+          finishPathAtCoord(hoverCoord);
+        }
         return;
       }
       const coord = info.coordinate as [number, number] | undefined;
@@ -617,21 +636,43 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     const coord = info.coordinate as [number, number] | undefined;
     if (!coord) return;
 
-    if (activePath.length >= 3 && info.viewport) {
-      const firstNodePixel = info.viewport.project([
-        activePath[0].coords[0],
-        activePath[0].coords[1],
-      ]);
-      const dx = (info.x ?? 0) - firstNodePixel[0];
-      const dy = (info.y ?? 0) - firstNodePixel[1];
-      if (Math.sqrt(dx * dx + dy * dy) < SNAP_RADIUS_PX) {
-        setIsSnapping(true);
-        setHoverCoord(activePath[0].coords);
-        return;
+    if (info.viewport) {
+      const cx = info.x ?? 0;
+      const cy = info.y ?? 0;
+
+      // Priority 1: snap to first node of active path to self-close as polygon
+      if (activePath.length >= 3) {
+        const [px, py] = info.viewport.project([
+          activePath[0].coords[0],
+          activePath[0].coords[1],
+        ]);
+        if (Math.sqrt((cx - px) ** 2 + (cy - py) ** 2) < SNAP_RADIUS_PX) {
+          setIsSnapping(true);
+          setSnapIsFirstNode(true);
+          setHoverCoord(activePath[0].coords);
+          return;
+        }
+      }
+
+      // Priority 2: snap to any node on a completed path to connect and close
+      for (const path of paths) {
+        for (const node of path.nodes) {
+          const [px, py] = info.viewport.project([
+            node.coords[0],
+            node.coords[1],
+          ]);
+          if (Math.sqrt((cx - px) ** 2 + (cy - py) ** 2) < SNAP_RADIUS_PX) {
+            setIsSnapping(true);
+            setSnapIsFirstNode(false);
+            setHoverCoord(node.coords);
+            return;
+          }
+        }
       }
     }
 
     setIsSnapping(false);
+    setSnapIsFirstNode(false);
     setHoverCoord(coord);
   }
 
@@ -656,6 +697,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setActivePath([]);
     setHoverCoord(null);
     setIsSnapping(false);
+    setSnapIsFirstNode(false);
   }
 
   function finishPath(closed = false) {
@@ -678,6 +720,37 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setIsDrawing(false);
     setHoverCoord(null);
     setIsSnapping(false);
+  }
+
+  function finishPathAtCoord(coord: [number, number]) {
+    const extraNode: Node = {
+      id: crypto.randomUUID(),
+      name: `Node ${activePath.length + 1}`,
+      coords: coord,
+      z: 0,
+    };
+    const nodes = [...activePath, extraNode];
+    if (nodes.length < 2) return;
+    const name = pathName.trim() || `Path ${pathCount}`;
+    const isClosed = nodes.length >= 3;
+    setPaths((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        name,
+        nodes,
+        color: activeColor,
+        width: activeWidth,
+        isClosed,
+      },
+    ]);
+    setPathCount((n) => n + 1);
+    setPathName("");
+    setActivePath([]);
+    setIsDrawing(false);
+    setHoverCoord(null);
+    setIsSnapping(false);
+    setSnapIsFirstNode(false);
   }
 
   function updatePathName(id: string, name: string) {
@@ -1162,7 +1235,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
               }}
             >
               {isSnapping
-                ? "Click to close area"
+                ? snapIsFirstNode
+                  ? "Click to close area"
+                  : "Click to connect & close"
                 : activePath.length === 0
                   ? "Click to place first node"
                   : `${activePath.length} node${activePath.length !== 1 ? "s" : ""} — click to extend`}
