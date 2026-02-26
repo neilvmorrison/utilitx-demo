@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { loadFromStorage, saveToStorage } from "@/lib/storage";
 
 export type Node = {
   id: string;
@@ -16,13 +17,28 @@ export type DrawnPath = {
   isClosed: boolean;
 };
 
+const STORAGE_KEY_PATHS = "utilitix_paths";
+const STORAGE_KEY_PATH_COUNT = "utilitix_pathCount";
+
 export function usePaths() {
-  const [paths, setPaths] = useState<DrawnPath[]>([]);
-  const [pathCount, setPathCount] = useState(1);
+  const [paths, setPaths] = useState<DrawnPath[]>(() =>
+    loadFromStorage<DrawnPath[]>(STORAGE_KEY_PATHS, []),
+  );
+  const [pathCount, setPathCount] = useState<number>(() =>
+    loadFromStorage<number>(STORAGE_KEY_PATH_COUNT, 1),
+  );
   // Ref kept in sync so drag/keyboard callbacks can read the latest paths
   // without capturing stale closures
   const pathsRef = useRef<DrawnPath[]>([]);
   pathsRef.current = paths;
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_PATHS, paths);
+  }, [paths]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_PATH_COUNT, pathCount);
+  }, [pathCount]);
 
   function createPath(
     nodes: Node[],
