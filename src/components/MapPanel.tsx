@@ -46,6 +46,7 @@ interface MapPanelProps {
   onUpdatePathWidth: (id: string, width: number) => void;
   onUpdateNodeName: (pathId: string, nodeId: string, name: string) => void;
   onUpdateNodeZ: (pathId: string, nodeId: string, z: number) => void;
+  onTogglePathVisibility: (id: string) => void;
 }
 
 export default function MapPanel({
@@ -76,6 +77,7 @@ export default function MapPanel({
   onUpdatePathWidth,
   onUpdateNodeName,
   onUpdateNodeZ,
+  onTogglePathVisibility,
 }: MapPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
@@ -573,6 +575,8 @@ export default function MapPanel({
                       onUpdateNodeZ(path.id, nodeId, z)
                     }
                     onDelete={() => onDeletePath(path.id)}
+                    isHidden={path.isHidden}
+                    onToggleHidden={() => onTogglePathVisibility(path.id)}
                   />
                 ))}
               </div>

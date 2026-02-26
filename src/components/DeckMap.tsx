@@ -5,6 +5,7 @@ import { useKeyboardListener } from "@/hooks/useKeyboardListener";
 import { useEventListener } from "@/hooks/useEventListener";
 import { usePaths } from "@/hooks/usePaths";
 import type { Node } from "@/hooks/usePaths";
+import { useLayers, DEFAULT_LAYER_ID } from "@/hooks/useLayers";
 import { DeckGL } from "@deck.gl/react";
 import { Map as MapGL } from "react-map-gl/maplibre";
 import type { PickingInfo } from "@deck.gl/core";
@@ -29,6 +30,7 @@ import {
   computePreviewStartCoord,
 } from "@/lib/drawingGeometry";
 import MapPanel from "./MapPanel";
+import LayersPanel from "./LayersPanel";
 import NodeContextMenu from "./NodeContextMenu";
 import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
 
@@ -63,7 +65,17 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     removeNodes,
     dragNodes,
     subdivideEdge,
+    togglePathVisibility,
+    movePathsToLayer,
   } = usePaths();
+
+  const {
+    layers,
+    createLayer,
+    updateLayerName,
+    toggleLayerVisibility,
+    deleteLayer,
+  } = useLayers();
 
   // Drawing state
   const [activePath, setActivePath] = useState<Node[]>([]);
@@ -88,6 +100,10 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   // When set, "drawing" mode appends nodes to this existing path instead of creating a new one
   const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
+
+  // Layers panel state
+  const [activeLayerId, setActiveLayerId] = useState<string>(DEFAULT_LAYER_ID);
+  const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
 
   // Refs for stable access inside drag/keyboard callbacks
   const editingPathIdRef = useRef<string | null>(null);
@@ -249,16 +265,23 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
   // --- Layers ---
 
-  const layers = [
+  const hiddenLayerIds = new Set(
+    layers.filter((l) => !l.isVisible).map((l) => l.id),
+  );
+  const visiblePaths = paths.filter(
+    (p) => !p.isHidden && !hiddenLayerIds.has(p.layerId),
+  );
+
+  const deckLayers = [
     buildArcgisLayer(geoData),
-    buildPathsLayer(paths, editingPathId),
+    buildPathsLayer(visiblePaths, editingPathId),
     buildClosingPreviewLayer(showClosingPreview, closingPreviewCoords, activeColor),
     buildActivePathLayer(activePathDisplayCoords, activeColor, activeWidth),
     buildActiveDotsLayer(activePath, activeColor),
     buildSnapRingLayer(isSnapping, hoverCoord, canSnapClose),
     buildPreviewLayer(isDrawing, previewStartCoord, hoverCoord, activeColor, isSnapping),
     buildEditNodesLayer(editingPath, selectedNodeIds, selectionKey, dragCallbacks),
-    buildClosedAreaLabelsLayer(paths),
+    buildClosedAreaLabelsLayer(visiblePaths),
   ].filter((l): l is NonNullable<typeof l> => l !== null);
 
   // --- Handlers ---
@@ -522,6 +545,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       color: activeColor,
       width: activeWidth,
       isClosed,
+      layerId: activeLayerId,
     });
     setPathName("");
     setActivePath([]);
@@ -539,6 +563,12 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     }
   }
 
+  function handleDeleteLayer(layerId: string) {
+    movePathsToLayer(layerId, DEFAULT_LAYER_ID);
+    deleteLayer(layerId);
+    if (activeLayerId === layerId) setActiveLayerId(DEFAULT_LAYER_ID);
+  }
+
   // --- Render ---
 
   return (
@@ -549,7 +579,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       <DeckGL
         initialViewState={INITIAL_VIEW_STATE}
         controller={!isDraggingNode}
-        layers={layers}
+        layers={deckLayers}
         onClick={handleClick as (info: PickingInfo) => void}
         onHover={handleHover}
         getCursor={({ isDragging }) =>
@@ -633,7 +663,48 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         onUpdatePathWidth={updatePathWidth}
         onUpdateNodeName={updateNodeName}
         onUpdateNodeZ={updateNodeZ}
+        onTogglePathVisibility={togglePathVisibility}
       />
+
+      {/* Layers toggle button — bottom-left */}
+      <button
+        onClick={() => setIsLayersPanelOpen((v) => !v)}
+        style={{
+          position: "absolute",
+          bottom: 16,
+          left: 16,
+          zIndex: 10,
+          background: isLayersPanelOpen
+            ? "rgba(30, 95, 168, 0.9)"
+            : "rgba(10, 14, 22, 0.88)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 8,
+          color: "#fff",
+          fontSize: 12,
+          fontWeight: 600,
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          padding: "7px 14px",
+          cursor: "pointer",
+          backdropFilter: "blur(10px)",
+          boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
+          userSelect: "none",
+        }}
+      >
+        ◧ Layers
+      </button>
+
+      {isLayersPanelOpen && (
+        <LayersPanel
+          layers={layers}
+          activeLayerId={activeLayerId}
+          paths={paths}
+          onSetActiveLayer={setActiveLayerId}
+          onCreateLayer={createLayer}
+          onUpdateLayerName={updateLayerName}
+          onToggleLayerVisibility={toggleLayerVisibility}
+          onDeleteLayer={handleDeleteLayer}
+        />
+      )}
     </div>
   );
 }
