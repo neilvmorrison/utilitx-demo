@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useKeyboardListener } from "@/hooks/useKeyboardListener";
 import { DeckGL } from "@deck.gl/react";
-import { GeoJsonLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
 import { Map as MapGL } from "react-map-gl/maplibre";
 import type { PickingInfo } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -53,7 +54,7 @@ const INITIAL_VIEW_STATE = {
   longitude: -79.3874715594294,
   latitude: 43.64118809154064,
   zoom: 14,
-  pitch: 30,
+  pitch: -30,
   bearing: 0,
 };
 
@@ -72,6 +73,12 @@ type DrawnPath = {
   width: number;
   isClosed: boolean;
 };
+
+function computeCentroid(nodes: Node[]): [number, number] {
+  const lon = nodes.reduce((sum, n) => sum + n.coords[0], 0) / nodes.length;
+  const lat = nodes.reduce((sum, n) => sum + n.coords[1], 0) / nodes.length;
+  return [lon, lat];
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   return [
@@ -108,6 +115,8 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     new Set(),
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
+  // When set, "drawing" mode appends nodes to this existing path instead of creating a new one
+  const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
 
   // Refs for stable access inside drag/keyboard callbacks
   const editingPathIdRef = useRef<string | null>(null);
@@ -134,46 +143,48 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   }, [paths, editingPathId]);
 
   // Keyboard: Escape deactivates; Delete/Backspace removes all selected nodes
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        if (isDrawingRef.current) {
-          setIsDrawing(false);
-          setActivePath([]);
-          setHoverCoord(null);
-          setIsSnapping(false);
-          setSnapIsFirstNode(false);
-        } else {
-          setEditingPathId(null);
-          setSelectedNodeIds(new Set());
-        }
-        return;
-      }
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if ((e.target as HTMLElement).tagName === "INPUT") return;
-        const nodeIds = selectedNodeIdsRef.current;
-        const pathId = editingPathIdRef.current;
-        if (nodeIds.size === 0 || !pathId) return;
-        setPaths((prev) => {
-          const path = prev.find((p) => p.id === pathId);
-          if (!path) return prev;
-          const newNodes = path.nodes.filter((n) => !nodeIds.has(n.id));
-          if (newNodes.length < 2) return prev.filter((p) => p.id !== pathId);
-          const isClosed = path.isClosed && newNodes.length >= 3;
-          return prev.map((p) =>
-            p.id === pathId ? { ...p, nodes: newNodes, isClosed } : p,
-          );
-        });
-        setSelectedNodeIds(new Set());
-      }
+  useKeyboardListener("Escape", () => {
+    if (isDrawingRef.current) {
+      setIsDrawing(false);
+      setExtendingPathId(null);
+      setActivePath([]);
+      setHoverCoord(null);
+      setIsSnapping(false);
+      setSnapIsFirstNode(false);
+    } else {
+      setEditingPathId(null);
+      setSelectedNodeIds(new Set());
     }
+  });
 
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+  function deleteSelectedNodes() {
+    const nodeIds = selectedNodeIdsRef.current;
+    const pathId = editingPathIdRef.current;
+    if (nodeIds.size === 0 || !pathId) return;
+    setPaths((prev) => {
+      const path = prev.find((p) => p.id === pathId);
+      if (!path) return prev;
+      const newNodes = path.nodes.filter((n) => !nodeIds.has(n.id));
+      if (newNodes.length < 2) return prev.filter((p) => p.id !== pathId);
+      const isClosed = path.isClosed && newNodes.length >= 3;
+      return prev.map((p) =>
+        p.id === pathId ? { ...p, nodes: newNodes, isClosed } : p,
+      );
+    });
+    setSelectedNodeIds(new Set());
+  }
+
+  useKeyboardListener("Delete", deleteSelectedNodes, {
+    skipInputElements: true,
+  });
+  useKeyboardListener("Backspace", deleteSelectedNodes, {
+    skipInputElements: true,
+  });
 
   const editingPath = paths.find((p) => p.id === editingPathId) ?? null;
+  const extendingPath = extendingPathId
+    ? (paths.find((p) => p.id === extendingPathId) ?? null)
+    : null;
   // Stable key for updateTriggers — avoid creating a new array reference every render
   const selectionKey = [...selectedNodeIds].sort().join(",");
 
@@ -204,14 +215,18 @@ export default function DeckMap({ geoData }: DeckMapProps) {
           id: "drawn-paths",
           data: {
             type: "FeatureCollection" as const,
-            features: paths.map((p) => ({
+            features: paths.map((p, i) => ({
               type: "Feature" as const,
               geometry: p.isClosed
                 ? ({
                     type: "Polygon" as const,
                     coordinates: [
                       [
-                        ...p.nodes.map((n) => [n.coords[0], n.coords[1], n.z]),
+                        ...p.nodes.map((n) => [
+                          n.coords[0],
+                          n.coords[1],
+                          n.z + i * 0.5,
+                        ]),
                         [
                           p.nodes[0].coords[0],
                           p.nodes[0].coords[1],
@@ -273,9 +288,17 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         })
       : null;
 
-  // In-progress path being drawn
+  // In-progress path being drawn.
+  // When extending, prepend the last node of the existing path so the new
+  // segment visually originates from it; only requires 1 new node (not 2).
+  const activePathDisplayCoords: [number, number][] = extendingPath
+    ? [
+        extendingPath.nodes[extendingPath.nodes.length - 1].coords,
+        ...activePath.map((n) => n.coords),
+      ]
+    : activePath.map((n) => n.coords);
   const activePathLayer =
-    activePath.length >= 2
+    activePathDisplayCoords.length >= 2
       ? new GeoJsonLayer({
           id: "active-path",
           data: {
@@ -285,7 +308,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
                 type: "Feature" as const,
                 geometry: {
                   type: "LineString" as const,
-                  coordinates: activePath.map((n) => n.coords),
+                  coordinates: activePathDisplayCoords,
                 },
                 properties: {},
               },
@@ -344,8 +367,13 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       : null;
 
   // Snap ring — shown whenever isSnapping, centred on hoverCoord (the snap target)
+  const totalNodesForClose =
+    (extendingPath?.nodes.length ?? 0) + activePath.length;
+  const canSnapClose = extendingPath
+    ? totalNodesForClose >= 3
+    : activePath.length >= (snapIsFirstNode ? 3 : 2);
   const snapRingLayer =
-    isSnapping && hoverCoord && activePath.length >= (snapIsFirstNode ? 3 : 2)
+    isSnapping && hoverCoord && canSnapClose
       ? new GeoJsonLayer({
           id: "snap-ring",
           data: {
@@ -378,17 +406,32 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       : null;
 
   // Transparent fill preview when snapping to close or connect.
-  // For first-node snap: polygon loops back through activePath[0].
-  // For completed-path-node snap: polygon includes hoverCoord then closes to activePath[0].
+  // When extending: the preview polygon spans the existing path nodes + new nodes.
+  // When new path: same as before (activePath only).
+  const rootCoords: [number, number][] = extendingPath
+    ? [
+        ...extendingPath.nodes.map((n) => n.coords),
+        ...activePath.map((n) => n.coords),
+      ]
+    : activePath.map((n) => n.coords);
+  const rootFirstCoord: [number, number] | null = extendingPath
+    ? extendingPath.nodes[0].coords
+    : (activePath[0]?.coords ?? null);
   const showClosingPreview =
     isSnapping &&
     hoverCoord &&
-    (snapIsFirstNode ? activePath.length >= 3 : activePath.length >= 2);
-  const closingPreviewCoords: [number, number][] = showClosingPreview
-    ? snapIsFirstNode
-      ? [...activePath.map((n) => n.coords), activePath[0].coords]
-      : [...activePath.map((n) => n.coords), hoverCoord, activePath[0].coords]
-    : [];
+    rootFirstCoord !== null &&
+    (extendingPath
+      ? totalNodesForClose >= 3
+      : snapIsFirstNode
+        ? activePath.length >= 3
+        : activePath.length >= 2);
+  const closingPreviewCoords: [number, number][] =
+    showClosingPreview && rootFirstCoord
+      ? snapIsFirstNode
+        ? [...rootCoords, rootFirstCoord]
+        : [...rootCoords, hoverCoord, rootFirstCoord]
+      : [];
   const closingPreviewLayer = showClosingPreview
     ? new GeoJsonLayer({
         id: "closing-preview",
@@ -405,20 +448,26 @@ export default function DeckMap({ geoData }: DeckMapProps) {
             },
           ],
         },
-          filled: true,
-          getFillColor: [...hexToRgb(activeColor), 35] as [
-            number,
-            number,
-            number,
-            number,
-          ],
-          stroked: false,
-        })
-      : null;
+        filled: true,
+        getFillColor: [...hexToRgb(activeColor), 35] as [
+          number,
+          number,
+          number,
+          number,
+        ],
+        stroked: false,
+      })
+    : null;
 
-  // Ghost line from last placed node to cursor
+  // Ghost line from last placed node (or extending path's last node) to cursor
+  const previewStartCoord: [number, number] | null =
+    activePath.length > 0
+      ? activePath[activePath.length - 1].coords
+      : extendingPath
+        ? extendingPath.nodes[extendingPath.nodes.length - 1].coords
+        : null;
   const previewLayer =
-    isDrawing && activePath.length > 0 && hoverCoord
+    isDrawing && previewStartCoord && hoverCoord
       ? new GeoJsonLayer({
           id: "preview-line",
           data: {
@@ -428,10 +477,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
                 type: "Feature" as const,
                 geometry: {
                   type: "LineString" as const,
-                  coordinates: [
-                    activePath[activePath.length - 1].coords,
-                    hoverCoord,
-                  ],
+                  coordinates: [previewStartCoord, hoverCoord],
                 },
                 properties: {},
               },
@@ -552,6 +598,34 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       })
     : null;
 
+  // Labels at the centroid of each closed area.
+  // SDF font enables the outline which creates contrast against both the transparent
+  // fill and any underlying map features.
+  const closedAreaLabelsLayer = paths.some((p) => p.isClosed)
+    ? new TextLayer({
+        id: "closed-area-labels",
+        data: paths.filter((p) => p.isClosed),
+        getPosition: (p: DrawnPath) => computeCentroid(p.nodes),
+        getText: (p: DrawnPath) => p.name,
+        getColor: (p: DrawnPath) =>
+          [...hexToRgb(p.color), 255] as [number, number, number, number],
+        getSize: 13,
+        sizeUnits: "pixels" as const,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        fontWeight: 600,
+        fontSettings: { sdf: true },
+        outlineWidth: 3,
+        outlineColor: [0, 0, 0, 200] as [number, number, number, number],
+        getTextAnchor: "middle" as const,
+        getAlignmentBaseline: "center" as const,
+        updateTriggers: {
+          getPosition: [paths.map((p) => p.nodes)],
+          getText: [paths.map((p) => p.name)],
+          getColor: [paths.map((p) => p.color)],
+        },
+      })
+    : null;
+
   const layers = [
     arcgisLayer,
     pathsLayer,
@@ -561,6 +635,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     snapRingLayer,
     previewLayer,
     editNodesLayer,
+    closedAreaLabelsLayer,
   ].filter((l): l is NonNullable<typeof l> => l !== null);
 
   // --- Handlers ---
@@ -568,13 +643,22 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   function handleClick(info: PickingInfo, event?: { srcEvent?: MouseEvent }) {
     if (isDrawing) {
       if (isSnapping && hoverCoord) {
-        if (snapIsFirstNode && activePath.length >= 3) {
-          // Self-close: loop back to first node, forming a polygon
-          finishPath(true);
-        } else if (activePath.length >= 1) {
-          // Connect to a node on an existing path — add snap coord as final node,
-          // then close as polygon if there will be ≥3 nodes total
-          finishPathAtCoord(hoverCoord);
+        if (snapIsFirstNode) {
+          if (extendingPath && totalNodesForClose >= 3) {
+            // Close the extending path back to its own first node
+            finishExtension(true);
+          } else if (!extendingPath && activePath.length >= 3) {
+            // Self-close a new path
+            finishPath(true);
+          }
+        } else {
+          if (extendingPath) {
+            // Connect extending path to another path's node, forming a closed area
+            finishExtension(true, hoverCoord);
+          } else if (activePath.length >= 1) {
+            // Connect new path to another path's node, forming a closed area
+            finishPathAtCoord(hoverCoord);
+          }
         }
         return;
       }
@@ -640,8 +724,25 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       const cx = info.x ?? 0;
       const cy = info.y ?? 0;
 
-      // Priority 1: snap to first node of active path to self-close as polygon
-      if (activePath.length >= 3) {
+      // Priority 1: snap to the "root" first node to close the shape.
+      // When extending: root = first node of the extending path.
+      // When new path: root = first node of activePath (self-close).
+      if (extendingPath) {
+        const firstNode = extendingPath.nodes[0];
+        const canClose = extendingPath.nodes.length + activePath.length >= 3;
+        if (canClose) {
+          const [px, py] = info.viewport.project([
+            firstNode.coords[0],
+            firstNode.coords[1],
+          ]);
+          if (Math.sqrt((cx - px) ** 2 + (cy - py) ** 2) < SNAP_RADIUS_PX) {
+            setIsSnapping(true);
+            setSnapIsFirstNode(true);
+            setHoverCoord(firstNode.coords);
+            return;
+          }
+        }
+      } else if (activePath.length >= 3) {
         const [px, py] = info.viewport.project([
           activePath[0].coords[0],
           activePath[0].coords[1],
@@ -654,8 +755,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         }
       }
 
-      // Priority 2: snap to any node on a completed path to connect and close
+      // Priority 2: snap to any node on a completed path (skip extending path's own nodes)
       for (const path of paths) {
+        if (path.id === extendingPathId) continue;
         for (const node of path.nodes) {
           const [px, py] = info.viewport.project([
             node.coords[0],
@@ -688,13 +790,58 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
   function startDrawing() {
     setIsDrawing(true);
+    setExtendingPathId(null);
     setEditingPathId(null);
     setSelectedNodeIds(new Set());
   }
 
+  function startExtending(pathId: string) {
+    setExtendingPathId(pathId);
+    setIsDrawing(true);
+    setActivePath([]);
+    setHoverCoord(null);
+    setIsSnapping(false);
+    setSnapIsFirstNode(false);
+  }
+
   function cancelDrawing() {
     setIsDrawing(false);
+    setExtendingPathId(null);
     setActivePath([]);
+    setHoverCoord(null);
+    setIsSnapping(false);
+    setSnapIsFirstNode(false);
+  }
+
+  // Append the in-progress nodes to the extending path.
+  // Pass closed=true to mark the result as a closed polygon.
+  // Pass extraCoord to snap-append a final node (e.g. from another path) before finishing.
+  function finishExtension(closed: boolean, extraCoord?: [number, number]) {
+    const pathId = extendingPathId;
+    if (!pathId) return;
+    const extraNode: Node | null = extraCoord
+      ? {
+          id: crypto.randomUUID(),
+          name: `Node ${activePath.length + 1}`,
+          coords: extraCoord,
+          z: 0,
+        }
+      : null;
+    const newNodes = extraNode ? [...activePath, extraNode] : [...activePath];
+    setPaths((prev) =>
+      prev.map((p) => {
+        if (p.id !== pathId) return p;
+        const allNodes = [...p.nodes, ...newNodes];
+        return {
+          ...p,
+          nodes: allNodes,
+          isClosed: closed && allNodes.length >= 3,
+        };
+      }),
+    );
+    setExtendingPathId(null);
+    setActivePath([]);
+    setIsDrawing(false);
     setHoverCoord(null);
     setIsSnapping(false);
     setSnapIsFirstNode(false);
@@ -1166,28 +1313,50 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
         {/* Action buttons */}
         {!isDrawing ? (
-          <button
-            onClick={startDrawing}
-            style={{
-              width: "100%",
-              padding: "8px 0",
-              borderRadius: 6,
-              border: "none",
-              background: "#1e5fa8",
-              color: "#fff",
-              fontWeight: 600,
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            New Path
-          </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={startDrawing}
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: 6,
+                border: "none",
+                background: "#1e5fa8",
+                color: "#fff",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: 13,
+              }}
+            >
+              New Path
+            </button>
+            {editingPathId && (
+              <button
+                onClick={() => startExtending(editingPathId)}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#4a3a8a",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                Add Node
+              </button>
+            )}
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", gap: 6 }}>
-              {activePath.length >= 2 && (
+              {activePath.length >= (extendingPath ? 1 : 2) && (
                 <button
-                  onClick={() => finishPath(false)}
+                  onClick={() =>
+                    extendingPath ? finishExtension(false) : finishPath(false)
+                  }
                   style={{
                     flex: 1,
                     padding: "8px 0",
@@ -1200,7 +1369,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
                     fontSize: 13,
                   }}
                 >
-                  Finish Path
+                  {extendingPath ? "Apply" : "Finish Path"}
                 </button>
               )}
               <button
@@ -1239,8 +1408,12 @@ export default function DeckMap({ geoData }: DeckMapProps) {
                   ? "Click to close area"
                   : "Click to connect & close"
                 : activePath.length === 0
-                  ? "Click to place first node"
-                  : `${activePath.length} node${activePath.length !== 1 ? "s" : ""} — click to extend`}
+                  ? extendingPath
+                    ? "Click to place first new node"
+                    : "Click to place first node"
+                  : extendingPath
+                    ? `${activePath.length} new node${activePath.length !== 1 ? "s" : ""} — click to extend`
+                    : `${activePath.length} node${activePath.length !== 1 ? "s" : ""} — click to extend`}
             </div>
           </div>
         )}

@@ -17,4 +17,4 @@ Stack:
 
 Constraint:
 
-- Will likely be used by city officials so must be performant on regular hardware.
+- Will likely be used by city officials so must be performant on standard-issue hardware.
