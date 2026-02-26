@@ -95,9 +95,16 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     new Set(),
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
-  const [hoveredEditNodeId, setHoveredEditNodeId] = useState<string | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredEditNodeId, setHoveredEditNodeId] = useState<string | null>(
+    null,
+  );
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   // When set, "drawing" mode appends nodes to this existing path instead of creating a new one
   const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
 
@@ -275,12 +282,27 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const deckLayers = [
     buildArcgisLayer(geoData),
     buildPathsLayer(visiblePaths, editingPathId),
-    buildClosingPreviewLayer(showClosingPreview, closingPreviewCoords, activeColor),
+    buildClosingPreviewLayer(
+      showClosingPreview,
+      closingPreviewCoords,
+      activeColor,
+    ),
     buildActivePathLayer(activePathDisplayCoords, activeColor, activeWidth),
     buildActiveDotsLayer(activePath, activeColor),
     buildSnapRingLayer(isSnapping, hoverCoord, canSnapClose),
-    buildPreviewLayer(isDrawing, previewStartCoord, hoverCoord, activeColor, isSnapping),
-    buildEditNodesLayer(editingPath, selectedNodeIds, selectionKey, dragCallbacks),
+    buildPreviewLayer(
+      isDrawing,
+      previewStartCoord,
+      hoverCoord,
+      activeColor,
+      isSnapping,
+    ),
+    buildEditNodesLayer(
+      editingPath,
+      selectedNodeIds,
+      selectionKey,
+      dragCallbacks,
+    ),
     buildClosedAreaLabelsLayer(visiblePaths),
   ].filter((l): l is NonNullable<typeof l> => l !== null);
 
@@ -288,6 +310,11 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
   function handleClick(info: PickingInfo, event?: { srcEvent?: MouseEvent }) {
     // Right-clicks are handled exclusively by handleContextMenu
+    if (!info.object) {
+      setActivePath([]);
+      setEditingPathId(null);
+      return;
+    }
     if (event?.srcEvent?.button === 2) return;
 
     if (isDrawing) {
@@ -606,7 +633,8 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       )}
 
       {(() => {
-        if (!hoveredEditNodeId || !tooltipPos || isDrawing || !editingPath) return null;
+        if (!hoveredEditNodeId || !tooltipPos || isDrawing || !editingPath)
+          return null;
         const node = editingPath.nodes.find((n) => n.id === hoveredEditNodeId);
         if (!node) return null;
         return (
