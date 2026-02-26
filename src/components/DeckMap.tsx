@@ -33,6 +33,7 @@ import MapPanel from "./MapPanel";
 import LayersPanel from "./LayersPanel";
 import NodeContextMenu from "./NodeContextMenu";
 import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
+import { loadFromStorage, saveToStorage } from "@/lib/storage";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SNAP_RADIUS_PX = 20;
@@ -599,7 +600,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       onContextMenu={handleContextMenu}
     >
       <DeckGL
-        initialViewState={INITIAL_VIEW_STATE}
+        initialViewState={loadFromStorage("view-state", INITIAL_VIEW_STATE)}
         controller={!isDraggingNode}
         layers={deckLayers}
         onClick={handleClick as (info: PickingInfo) => void}
@@ -612,6 +613,10 @@ export default function DeckMap({ geoData }: DeckMapProps) {
               : "grab"
         }
         style={{ position: "absolute", inset: "0" }}
+        onViewStateChange={({ viewState }) => {
+          saveToStorage("view-state", viewState);
+          return;
+        }}
       >
         <MapGL mapStyle={MAP_STYLE} />
       </DeckGL>
