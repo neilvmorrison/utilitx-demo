@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useKeyboardListener } from "@/hooks/useKeyboardListener";
+import { useEventListener } from "@/hooks/useEventListener";
 import { usePaths } from "@/hooks/usePaths";
 import type { Node } from "@/hooks/usePaths";
 import { DeckGL } from "@deck.gl/react";
@@ -83,6 +84,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
   const [hoveredEditNodeId, setHoveredEditNodeId] = useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   // When set, "drawing" mode appends nodes to this existing path instead of creating a new one
   const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
@@ -137,6 +139,10 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     removeNodes(pathId, nodeIds);
     setSelectedNodeIds(new Set());
   }
+
+  useEventListener(window, "mousemove", (e) => {
+    setTooltipPos({ x: e.clientX, y: e.clientY });
+  });
 
   useKeyboardListener("Delete", deleteSelectedNodes, {
     skipInputElements: true,
@@ -568,6 +574,33 @@ export default function DeckMap({ geoData }: DeckMapProps) {
           onClose={closeContextMenu}
         />
       )}
+
+      {(() => {
+        if (!hoveredEditNodeId || !tooltipPos || isDrawing || !editingPath) return null;
+        const node = editingPath.nodes.find((n) => n.id === hoveredEditNodeId);
+        if (!node) return null;
+        return (
+          <div
+            style={{
+              position: "fixed",
+              left: tooltipPos.x,
+              top: tooltipPos.y - 36,
+              transform: "translateX(-50%)",
+              background: "rgba(0,0,0,0.72)",
+              color: "#fff",
+              padding: "3px 8px",
+              borderRadius: 4,
+              fontSize: 12,
+              fontFamily: "system-ui, -apple-system, sans-serif",
+              pointerEvents: "none",
+              whiteSpace: "nowrap",
+              zIndex: 100,
+            }}
+          >
+            {node.name}
+          </div>
+        );
+      })()}
 
       <MapPanel
         paths={paths}
