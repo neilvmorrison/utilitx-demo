@@ -2,53 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useKeyboardListener } from "@/hooks/useKeyboardListener";
+import { usePaths } from "@/hooks/usePaths";
+import type { Node, DrawnPath } from "@/hooks/usePaths";
 import { DeckGL } from "@deck.gl/react";
 import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
 import { Map as MapGL } from "react-map-gl/maplibre";
+import { UTILITY_PRESETS } from "../constants";
 import type { PickingInfo } from "@deck.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SNAP_RADIUS_PX = 20;
-
-const UTILITY_PRESETS = [
-  {
-    label: "Electrical / Power",
-    color: "#FF0000",
-    desc: "Power lines, cables, conduit, lighting",
-  },
-  {
-    label: "Gas / Oil / Steam",
-    color: "#FFCC00",
-    desc: "Gas, oil, steam, petroleum",
-  },
-  { label: "Potable Water", color: "#0070C0", desc: "Drinking water" },
-  {
-    label: "Sewer / Drain",
-    color: "#00A550",
-    desc: "Sanitary and storm sewer pipes/drains",
-  },
-  {
-    label: "Telecommunications",
-    color: "#FF8000",
-    desc: "Phone, fiber, alarm, signal lines",
-  },
-  {
-    label: "Reclaimed Water",
-    color: "#9900CC",
-    desc: "Irrigation and slurry lines",
-  },
-  {
-    label: "Proposed Excavation",
-    color: "#FFFFFF",
-    desc: "Proposed excavation routes",
-  },
-  {
-    label: "Survey Markings",
-    color: "#FF69B4",
-    desc: "Temporary survey markings",
-  },
-] as const;
 
 const INITIAL_VIEW_STATE = {
   longitude: -79.3874715594294,
@@ -56,22 +20,6 @@ const INITIAL_VIEW_STATE = {
   zoom: 14,
   pitch: -30,
   bearing: 0,
-};
-
-type Node = {
-  id: string;
-  name: string;
-  coords: [number, number];
-  z: number;
-};
-
-type DrawnPath = {
-  id: string;
-  name: string;
-  nodes: Node[];
-  color: string;
-  width: number;
-  isClosed: boolean;
 };
 
 function computeCentroid(nodes: Node[]): [number, number] {
@@ -93,8 +41,23 @@ interface DeckMapProps {
 }
 
 export default function DeckMap({ geoData }: DeckMapProps) {
+  const {
+    paths,
+    pathsRef,
+    pathCount,
+    createPath,
+    extendPath,
+    updatePathName,
+    updatePathColor,
+    updatePathWidth,
+    updateNodeName,
+    updateNodeZ,
+    deletePath: deletePathRecord,
+    removeNodes,
+    dragNodes,
+  } = usePaths();
+
   // Drawing state
-  const [paths, setPaths] = useState<DrawnPath[]>([]);
   const [activePath, setActivePath] = useState<Node[]>([]);
   const [hoverCoord, setHoverCoord] = useState<[number, number] | null>(null);
   const [isSnapping, setIsSnapping] = useState(false);
@@ -105,7 +68,6 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const [activeWidth, setActiveWidth] = useState(4);
   const [isDrawing, setIsDrawing] = useState(false);
   const [pathName, setPathName] = useState("");
-  const [pathCount, setPathCount] = useState(1);
   const [expandedPathId, setExpandedPathId] = useState<string | null>(null);
   const [presetOpen, setPresetOpen] = useState(false);
 
@@ -122,7 +84,6 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const editingPathIdRef = useRef<string | null>(null);
   const selectedNodeIdsRef = useRef<Set<string>>(new Set());
   const isDrawingRef = useRef(false);
-  const pathsRef = useRef<DrawnPath[]>([]);
   // Drag state refs — updated synchronously at drag start, read during onDrag
   const dragStartCoordRef = useRef<[number, number] | null>(null);
   const dragStartNodeCoordsRef = useRef<Map<string, [number, number]>>(
@@ -132,7 +93,6 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   editingPathIdRef.current = editingPathId;
   selectedNodeIdsRef.current = selectedNodeIds;
   isDrawingRef.current = isDrawing;
-  pathsRef.current = paths;
 
   // Clear editingPathId if the path was deleted elsewhere
   useEffect(() => {
@@ -161,16 +121,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     const nodeIds = selectedNodeIdsRef.current;
     const pathId = editingPathIdRef.current;
     if (nodeIds.size === 0 || !pathId) return;
-    setPaths((prev) => {
-      const path = prev.find((p) => p.id === pathId);
-      if (!path) return prev;
-      const newNodes = path.nodes.filter((n) => !nodeIds.has(n.id));
-      if (newNodes.length < 2) return prev.filter((p) => p.id !== pathId);
-      const isClosed = path.isClosed && newNodes.length >= 3;
-      return prev.map((p) =>
-        p.id === pathId ? { ...p, nodes: newNodes, isClosed } : p,
-      );
-    });
+    removeNodes(pathId, nodeIds);
     setSelectedNodeIds(new Set());
   }
 
@@ -565,24 +516,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
           const [cx, cy] = info.coordinate as [number, number];
           const dx = cx - startCoord[0];
           const dy = cy - startCoord[1];
-          const startNodeCoords = dragStartNodeCoordsRef.current;
-
-          setPaths((prev) =>
-            prev.map((p) => {
-              if (p.id !== pathId) return p;
-              return {
-                ...p,
-                nodes: p.nodes.map((n) => {
-                  const start = startNodeCoords.get(n.id);
-                  if (!start) return n;
-                  return {
-                    ...n,
-                    coords: [start[0] + dx, start[1] + dy] as [number, number],
-                  };
-                }),
-              };
-            }),
-          );
+          dragNodes(pathId, dragStartNodeCoordsRef.current, dx, dy);
           return true;
         },
         onDragEnd: () => {
@@ -657,7 +591,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
             finishExtension(true, hoverCoord);
           } else if (activePath.length >= 1) {
             // Connect new path to another path's node, forming a closed area
-            finishPathAtCoord(hoverCoord);
+            finishPath(false, hoverCoord);
           }
         }
         return;
@@ -817,8 +751,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   // Pass closed=true to mark the result as a closed polygon.
   // Pass extraCoord to snap-append a final node (e.g. from another path) before finishing.
   function finishExtension(closed: boolean, extraCoord?: [number, number]) {
-    const pathId = extendingPathId;
-    if (!pathId) return;
+    if (!extendingPathId) return;
     const extraNode: Node | null = extraCoord
       ? {
           id: crypto.randomUUID(),
@@ -828,17 +761,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         }
       : null;
     const newNodes = extraNode ? [...activePath, extraNode] : [...activePath];
-    setPaths((prev) =>
-      prev.map((p) => {
-        if (p.id !== pathId) return p;
-        const allNodes = [...p.nodes, ...newNodes];
-        return {
-          ...p,
-          nodes: allNodes,
-          isClosed: closed && allNodes.length >= 3,
-        };
-      }),
-    );
+    extendPath(extendingPathId, newNodes, closed);
     setExtendingPathId(null);
     setActivePath([]);
     setIsDrawing(false);
@@ -847,51 +770,27 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setSnapIsFirstNode(false);
   }
 
-  function finishPath(closed = false) {
-    if (activePath.length < 2) return;
-    const name = pathName.trim() || `Path ${pathCount}`;
-    setPaths((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        name,
-        nodes: activePath,
-        color: activeColor,
-        width: activeWidth,
-        isClosed: closed,
-      },
-    ]);
-    setPathCount((n) => n + 1);
-    setPathName("");
-    setActivePath([]);
-    setIsDrawing(false);
-    setHoverCoord(null);
-    setIsSnapping(false);
-  }
-
-  function finishPathAtCoord(coord: [number, number]) {
-    const extraNode: Node = {
-      id: crypto.randomUUID(),
-      name: `Node ${activePath.length + 1}`,
-      coords: coord,
-      z: 0,
-    };
-    const nodes = [...activePath, extraNode];
+  // Creates a new path from the active nodes. Pass snapCoord to append a
+  // final snap-to node; isClosed is then derived from the total node count.
+  function finishPath(closed: boolean, snapCoord?: [number, number]) {
+    const extraNode: Node | null = snapCoord
+      ? {
+          id: crypto.randomUUID(),
+          name: `Node ${activePath.length + 1}`,
+          coords: snapCoord,
+          z: 0,
+        }
+      : null;
+    const nodes = extraNode ? [...activePath, extraNode] : activePath;
     if (nodes.length < 2) return;
     const name = pathName.trim() || `Path ${pathCount}`;
-    const isClosed = nodes.length >= 3;
-    setPaths((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        name,
-        nodes,
-        color: activeColor,
-        width: activeWidth,
-        isClosed,
-      },
-    ]);
-    setPathCount((n) => n + 1);
+    const isClosed = snapCoord ? nodes.length >= 3 : closed;
+    createPath(nodes, {
+      name,
+      color: activeColor,
+      width: activeWidth,
+      isClosed,
+    });
     setPathName("");
     setActivePath([]);
     setIsDrawing(false);
@@ -900,49 +799,8 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setSnapIsFirstNode(false);
   }
 
-  function updatePathName(id: string, name: string) {
-    setPaths((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
-  }
-
-  function updatePathColor(id: string, color: string) {
-    setPaths((prev) => prev.map((p) => (p.id === id ? { ...p, color } : p)));
-  }
-
-  function updatePathWidth(id: string, width: number) {
-    const clamped = Math.max(1, Math.min(20, width));
-    setPaths((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, width: clamped } : p)),
-    );
-  }
-
-  function updateNodeName(pathId: string, nodeId: string, name: string) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.id !== pathId
-          ? p
-          : {
-              ...p,
-              nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, name } : n)),
-            },
-      ),
-    );
-  }
-
-  function updateNodeZ(pathId: string, nodeId: string, z: number) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.id !== pathId
-          ? p
-          : {
-              ...p,
-              nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, z } : n)),
-            },
-      ),
-    );
-  }
-
   function deletePath(id: string) {
-    setPaths((prev) => prev.filter((p) => p.id !== id));
+    deletePathRecord(id);
     if (expandedPathId === id) setExpandedPathId(null);
     if (editingPathId === id) {
       setEditingPathId(null);
