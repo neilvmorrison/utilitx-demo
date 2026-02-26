@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { loadFromStorage, saveToStorage } from "@/lib/storage";
+import { insertSubdivisionNode } from "@/lib/geometry-operations/subdivide-path";
+import { DEFAULT_LAYER_ID } from "@/hooks/useLayers";
 
 export type Node = {
   id: string;
@@ -15,15 +17,22 @@ export type DrawnPath = {
   color: string;
   width: number;
   isClosed: boolean;
+  layerId: string;
+  isHidden: boolean;
 };
 
 const STORAGE_KEY_PATHS = "utilitix_paths";
 const STORAGE_KEY_PATH_COUNT = "utilitix_pathCount";
 
 export function usePaths() {
-  const [paths, setPaths] = useState<DrawnPath[]>(() =>
-    loadFromStorage<DrawnPath[]>(STORAGE_KEY_PATHS, []),
-  );
+  const [paths, setPaths] = useState<DrawnPath[]>(() => {
+    const raw = loadFromStorage<DrawnPath[]>(STORAGE_KEY_PATHS, []);
+    return raw.map((p) => ({
+      ...p,
+      layerId: (p as { layerId?: string }).layerId ?? DEFAULT_LAYER_ID,
+      isHidden: (p as { isHidden?: boolean }).isHidden ?? false,
+    }));
+  });
   const [pathCount, setPathCount] = useState<number>(() =>
     loadFromStorage<number>(STORAGE_KEY_PATH_COUNT, 1),
   );
@@ -42,11 +51,11 @@ export function usePaths() {
 
   function createPath(
     nodes: Node[],
-    opts: { name: string; color: string; width: number; isClosed: boolean },
+    opts: { name: string; color: string; width: number; isClosed: boolean; layerId: string },
   ) {
     setPaths((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), ...opts, nodes },
+      { id: crypto.randomUUID(), isHidden: false, ...opts, nodes },
     ]);
     setPathCount((n) => n + 1);
   }
@@ -153,6 +162,28 @@ export function usePaths() {
     );
   }
 
+  function subdivideEdge(pathId: string, nodeId1: string, nodeId2: string) {
+    setPaths((prev) =>
+      prev.map((p) =>
+        p.id !== pathId ? p : insertSubdivisionNode(p, nodeId1, nodeId2),
+      ),
+    );
+  }
+
+  function togglePathVisibility(id: string) {
+    setPaths((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isHidden: !p.isHidden } : p)),
+    );
+  }
+
+  function movePathsToLayer(fromLayerId: string, toLayerId: string) {
+    setPaths((prev) =>
+      prev.map((p) =>
+        p.layerId === fromLayerId ? { ...p, layerId: toLayerId } : p,
+      ),
+    );
+  }
+
   return {
     paths,
     pathsRef,
@@ -167,5 +198,8 @@ export function usePaths() {
     deletePath,
     removeNodes,
     dragNodes,
+    subdivideEdge,
+    togglePathVisibility,
+    movePathsToLayer,
   };
 }

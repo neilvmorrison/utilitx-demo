@@ -28,6 +28,7 @@ interface PathListItemProps {
   path: DrawnPath;
   isEditing: boolean;
   isExpanded: boolean;
+  isHidden: boolean;
   onToggleExpand: () => void;
   onUpdateName: (name: string) => void;
   onUpdateColor: (color: string) => void;
@@ -35,12 +36,14 @@ interface PathListItemProps {
   onUpdateNodeName: (nodeId: string, name: string) => void;
   onUpdateNodeZ: (nodeId: string, z: number) => void;
   onDelete: () => void;
+  onToggleHidden: () => void;
 }
 
 export default function PathListItem({
   path,
   isEditing,
   isExpanded,
+  isHidden,
   onToggleExpand,
   onUpdateName,
   onUpdateColor,
@@ -48,6 +51,7 @@ export default function PathListItem({
   onUpdateNodeName,
   onUpdateNodeZ,
   onDelete,
+  onToggleHidden,
 }: PathListItemProps) {
   return (
     <div
@@ -60,6 +64,7 @@ export default function PathListItem({
         border: isEditing
           ? "1px solid rgba(255,255,255,0.15)"
           : "1px solid transparent",
+        opacity: isHidden ? 0.45 : 1,
       }}
     >
       {/* Header row */}
@@ -120,6 +125,22 @@ export default function PathListItem({
           }}
           title="Change color"
         />
+        <button
+          onClick={onToggleHidden}
+          title={isHidden ? "Show path" : "Hide path"}
+          style={{
+            background: "none",
+            border: "none",
+            color: isHidden ? "#444" : "#aaa",
+            cursor: "pointer",
+            fontSize: 12,
+            lineHeight: 1,
+            padding: "0 2px",
+            flexShrink: 0,
+          }}
+        >
+          {isHidden ? "◌" : "●"}
+        </button>
         <button
           onClick={onDelete}
           style={{
