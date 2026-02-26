@@ -310,11 +310,6 @@ export default function DeckMap({ geoData }: DeckMapProps) {
 
   function handleClick(info: PickingInfo, event?: { srcEvent?: MouseEvent }) {
     // Right-clicks are handled exclusively by handleContextMenu
-    if (!info.object) {
-      setActivePath([]);
-      setEditingPathId(null);
-      return;
-    }
     if (event?.srcEvent?.button === 2) return;
 
     if (isDrawing) {
