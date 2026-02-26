@@ -28,6 +28,8 @@ import {
   computePreviewStartCoord,
 } from "@/lib/drawingGeometry";
 import MapPanel from "./MapPanel";
+import NodeContextMenu from "./NodeContextMenu";
+import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SNAP_RADIUS_PX = 20;
@@ -59,6 +61,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     deletePath: deletePathRecord,
     removeNodes,
     dragNodes,
+    subdivideEdge,
   } = usePaths();
 
   // Drawing state
@@ -79,6 +82,8 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     new Set(),
   );
   const [isDraggingNode, setIsDraggingNode] = useState(false);
+  const [hoveredEditNodeId, setHoveredEditNodeId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   // When set, "drawing" mode appends nodes to this existing path instead of creating a new one
   const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
 
@@ -101,23 +106,29 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     if (editingPathId && !paths.find((p) => p.id === editingPathId)) {
       setEditingPathId(null);
       setSelectedNodeIds(new Set());
+      setContextMenu(null);
     }
   }, [paths, editingPathId]);
 
-  // Keyboard: Escape deactivates; Delete/Backspace removes all selected nodes
-  useKeyboardListener("Escape", () => {
-    if (isDrawingRef.current) {
-      setIsDrawing(false);
-      setExtendingPathId(null);
-      setActivePath([]);
-      setHoverCoord(null);
-      setIsSnapping(false);
-      setSnapIsFirstNode(false);
-    } else {
-      setEditingPathId(null);
-      setSelectedNodeIds(new Set());
-    }
-  });
+  // Keyboard: Escape deactivates; Delete/Backspace removes all selected nodes.
+  // Disabled when the context menu is open (NodeContextMenu handles Escape itself).
+  useKeyboardListener(
+    "Escape",
+    () => {
+      if (isDrawingRef.current) {
+        setIsDrawing(false);
+        setExtendingPathId(null);
+        setActivePath([]);
+        setHoverCoord(null);
+        setIsSnapping(false);
+        setSnapIsFirstNode(false);
+      } else {
+        setEditingPathId(null);
+        setSelectedNodeIds(new Set());
+      }
+    },
+    { enabled: !contextMenu },
+  );
 
   function deleteSelectedNodes() {
     const nodeIds = selectedNodeIdsRef.current;
@@ -140,6 +151,15 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     : null;
   // Stable key for updateTriggers — avoid creating a new array reference every render
   const selectionKey = [...selectedNodeIds].sort().join(",");
+
+  // True only when exactly 2 adjacent nodes are selected — enables Subdivide option
+  const canSubdivide =
+    editingPath !== null &&
+    selectedNodeIds.size === 2 &&
+    (() => {
+      const [id1, id2] = [...selectedNodeIds];
+      return areNodesAdjacent(editingPath, id1, id2);
+    })();
 
   // --- Drawing geometry ---
 
@@ -238,6 +258,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   // --- Handlers ---
 
   function handleClick(info: PickingInfo, event?: { srcEvent?: MouseEvent }) {
+    // Right-clicks are handled exclusively by handleContextMenu
+    if (event?.srcEvent?.button === 2) return;
+
     if (isDrawing) {
       if (isSnapping && hoverCoord) {
         if (snapIsFirstNode) {
@@ -313,6 +336,17 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   }
 
   function handleHover(info: PickingInfo) {
+    // Track which edit node the cursor is over so right-click can target it
+    if (editingPathIdRef.current && !isDrawingRef.current) {
+      if (info.layer?.id === "edit-nodes" && info.object) {
+        setHoveredEditNodeId(
+          (info.object.properties as { nodeId: string }).nodeId,
+        );
+      } else {
+        setHoveredEditNodeId(null);
+      }
+    }
+
     if (!isDrawing) return;
     const coord = info.coordinate as [number, number] | undefined;
     if (!coord) return;
@@ -379,10 +413,39 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     e.preventDefault();
     if (isDrawing) {
       cancelDrawing();
-    } else if (editingPathId) {
+      return;
+    }
+    if (hoveredEditNodeId && editingPathId) {
+      // If the right-clicked node is already selected, keep the whole selection.
+      // Otherwise replace selection with just this node.
+      setSelectedNodeIds((prev) =>
+        prev.has(hoveredEditNodeId) ? prev : new Set([hoveredEditNodeId]),
+      );
+      setContextMenu({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    // Fallback: clear edit mode
+    if (editingPathId) {
       setEditingPathId(null);
       setSelectedNodeIds(new Set());
     }
+  }
+
+  function closeContextMenu() {
+    setContextMenu(null);
+  }
+
+  function handleContextMenuDelete() {
+    deleteSelectedNodes();
+    closeContextMenu();
+  }
+
+  function handleContextMenuSubdivide() {
+    if (!editingPathId || selectedNodeIds.size !== 2) return;
+    const [id1, id2] = [...selectedNodeIds];
+    subdivideEdge(editingPathId, id1, id2);
+    setSelectedNodeIds(new Set());
+    closeContextMenu();
   }
 
   function startDrawing() {
@@ -494,6 +557,17 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       >
         <MapGL mapStyle={MAP_STYLE} />
       </DeckGL>
+
+      {contextMenu && (
+        <NodeContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          canSubdivide={canSubdivide}
+          onDelete={handleContextMenuDelete}
+          onSubdivide={handleContextMenuSubdivide}
+          onClose={closeContextMenu}
+        />
+      )}
 
       <MapPanel
         paths={paths}

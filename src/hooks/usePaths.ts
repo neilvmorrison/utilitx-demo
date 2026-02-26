@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { loadFromStorage, saveToStorage } from "@/lib/storage";
+import { insertSubdivisionNode } from "@/lib/geometry-operations/subdivide-path";
 
 export type Node = {
   id: string;
@@ -153,6 +154,14 @@ export function usePaths() {
     );
   }
 
+  function subdivideEdge(pathId: string, nodeId1: string, nodeId2: string) {
+    setPaths((prev) =>
+      prev.map((p) =>
+        p.id !== pathId ? p : insertSubdivisionNode(p, nodeId1, nodeId2),
+      ),
+    );
+  }
+
   return {
     paths,
     pathsRef,
@@ -167,5 +176,6 @@ export function usePaths() {
     deletePath,
     removeNodes,
     dragNodes,
+    subdivideEdge,
   };
 }
