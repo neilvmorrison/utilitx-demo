@@ -11,13 +11,12 @@ This project unifies underground asset records on an interactive map, supporting
 
 ## Agent Roster
 
-| Agent           | Owns                              | Entry Prompt                     |
-| --------------- | --------------------------------- | -------------------------------- |
-| architect       | Structure, stack decisions        | `.cursor/agents/architect.md`    |
-| frontend        | All of (apps/client)              | `.cursor/agents/frontend.md`     |
-| backend         | All of (apps/server)              | `.cursor/agents/backend.md`      |
-| db-admin        | All of (packages/db)              | `.cursor/agents/db-admin.md`     |
-| modelling-agent | All of (apps/client/lib/geometry) | `.cursor/agents/modelling-agent` |
+| Agent     | Owns                       | Entry Prompt                  |
+| --------- | -------------------------- | ----------------------------- |
+| architect | Structure, stack decisions | `.cursor/agents/architect.md` |
+| frontend  | All of (apps/client)       | `.cursor/agents/frontend.md`  |
+| backend   | All of (apps/server)       | `.cursor/agents/backend.md`   |
+| db-admin  | All of (packages/db)       | `.cursor/agents/db-admin.md`  |
 
 ## Routing Rules (Hard)
 
@@ -44,7 +43,6 @@ project-root/
 │ │ ├── architect.md ← architect agent system prompt
 │ │ ├── frontend.md
 │ │ ├── backend.md
-│ │ └── qa.md
 │ ├── sub-agents/
 │ │ ├── schema.md ← schema sub-agent brief template
 │ │ ├── test-writer.md
