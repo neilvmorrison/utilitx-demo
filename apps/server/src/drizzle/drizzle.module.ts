@@ -1,8 +1,8 @@
 import { Global, Module, DynamicModule } from '@nestjs/common';
-import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { createDb, type Database } from '@utilitix/db';
 
 export const DRIZZLE = Symbol('DRIZZLE');
-export type DrizzleDB = NodePgDatabase;
+export type DrizzleDB = Database;
 
 export interface DrizzleModuleOptions {
   connectionString: string;
@@ -17,7 +17,7 @@ export class DrizzleModule {
       providers: [
         {
           provide: DRIZZLE,
-          useFactory: () => drizzle(options.connectionString),
+          useFactory: () => createDb(options.connectionString),
         },
       ],
       exports: [DRIZZLE],
@@ -35,7 +35,7 @@ export class DrizzleModule {
           provide: DRIZZLE,
           useFactory: async (...args: any[]) => {
             const config = await options.useFactory(...args);
-            return drizzle(config.connectionString);
+            return createDb(config.connectionString);
           },
           inject: options.inject ?? [],
         },
