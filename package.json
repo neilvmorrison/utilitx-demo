@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter @utilitix/client dev",
+    "dev:server": "pnpm --filter @utilitix/server dev",
     "build": "pnpm --filter @utilitix/client build",
-    "start": "pnpm --filter @utilitix/client start"
+    "build:server": "pnpm --filter @utilitix/server build",
+    "start": "pnpm --filter @utilitix/client start",
+    "start:server": "pnpm --filter @utilitix/server start"
   }
 }
