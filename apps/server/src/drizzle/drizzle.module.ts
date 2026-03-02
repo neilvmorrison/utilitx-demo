@@ -25,7 +25,9 @@ export class DrizzleModule {
   }
 
   static forRootAsync(options: {
-    useFactory: (...args: any[]) => DrizzleModuleOptions | Promise<DrizzleModuleOptions>;
+    useFactory: (
+      ...args: any[]
+    ) => DrizzleModuleOptions | Promise<DrizzleModuleOptions>;
     inject?: any[];
   }): DynamicModule {
     return {
