@@ -16,6 +16,13 @@ export default function AuthProvider({
   }, []);
 
   return (
-    <OidcAuthProvider {...cognitoAuthConfig}>{children}</OidcAuthProvider>
+    <OidcAuthProvider
+      {...cognitoAuthConfig}
+      onSigninCallback={() => {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }}
+    >
+      {children}
+    </OidcAuthProvider>
   );
 }
