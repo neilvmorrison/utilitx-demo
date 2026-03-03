@@ -1,23 +1,42 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Authentication, CognitoUser } from '@nestjs-cognito/auth';
-import type { CognitoJwtPayload } from '@nestjs-cognito/core';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Authentication } from '@nestjs-cognito/auth';
+import { userProfiles } from '@utilitix/db';
 import { ProjectsService } from './projects.service';
-import { UserProfilesService } from '../user-profiles/user-profiles.service';
+import { EnsureProfileGuard } from '../auth/guards/ensure-profile.guard';
+import { CurrentProfile } from '../auth/decorators/current-profile.decorator';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
+type UserProfile = typeof userProfiles.$inferSelect;
+
 @ApiTags('projects')
-@Controller('projects')
+@UseGuards(EnsureProfileGuard)
 @Authentication()
+@Controller('projects')
 export class ProjectsController {
-  constructor(
-    private readonly service: ProjectsService,
-    private readonly userProfilesService: UserProfilesService,
-  ) {}
+  constructor(private readonly service: ProjectsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List projects, optionally filtered by organization' })
+  @ApiOperation({
+    summary: 'List projects, optionally filtered by organization',
+  })
   @ApiQuery({ name: 'organizationId', required: false, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Array of projects' })
   findAll(@Query('organizationId') organizationId?: string) {
@@ -36,8 +55,10 @@ export class ProjectsController {
   @Post()
   @ApiOperation({ summary: 'Create a project' })
   @ApiResponse({ status: 201, description: 'Created project' })
-  async create(@Body() dto: CreateProjectDto, @CognitoUser() user: CognitoJwtPayload) {
-    const profile = await this.userProfilesService.findOrCreateFromAuth(user);
+  async create(
+    @Body() dto: CreateProjectDto,
+    @CurrentProfile() profile: UserProfile,
+  ) {
     return this.service.create({
       ...dto,
       ownerId: profile.id,
