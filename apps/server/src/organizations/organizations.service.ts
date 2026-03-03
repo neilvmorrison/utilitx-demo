@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { organizations } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -20,7 +20,7 @@ export class OrganizationsService {
     const [row] = await this.db
       .select()
       .from(organizations)
-      .where(eq(organizations.id, id));
+      .where(and(isNull(organizations.deletedAt), eq(organizations.id, id)));
     if (!row) throw new NotFoundException(`Organization ${id} not found`);
     return row;
   }

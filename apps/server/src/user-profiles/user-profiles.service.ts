@@ -1,52 +1,55 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, isNull } from 'drizzle-orm';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { type InferSelectModel, eq, isNull, and } from 'drizzle-orm';
 import { userProfiles } from '@utilitix/db';
-import { DRIZZLE, DrizzleDB } from '../drizzle';
-import { CreateUserProfileDto } from './dto/create-user-profile.dto';
+import { DRIZZLE, type DrizzleDB } from '../drizzle';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
+import { CreateUserProfileDto } from './dto/create-user-profile.dto';
+
+type UserProfile = InferSelectModel<typeof userProfiles>;
 
 @Injectable()
 export class UserProfilesService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  async findAll(organizationId?: string) {
-    const query = this.db
+  async findByEmail(email: string): Promise<UserProfile | null> {
+    const [row] = await this.db
       .select()
       .from(userProfiles)
-      .where(isNull(userProfiles.deletedAt));
+      .where(
+        and(isNull(userProfiles.deletedAt), eq(userProfiles.email, email)),
+      );
+    return row ?? null;
+  }
 
+  async findAll(organizationId?: string) {
     if (organizationId) {
       return this.db
         .select()
         .from(userProfiles)
-        .where(eq(userProfiles.organizationId, organizationId));
+        .where(
+          and(
+            isNull(userProfiles.deletedAt),
+            eq(userProfiles.organizationId, organizationId),
+          ),
+        );
     }
-
-    return query;
+    return this.db
+      .select()
+      .from(userProfiles)
+      .where(isNull(userProfiles.deletedAt));
   }
 
   async findOne(id: string) {
     const [row] = await this.db
       .select()
       .from(userProfiles)
-      .where(eq(userProfiles.id, id));
-    if (!row) throw new NotFoundException(`User profile ${id} not found`);
+      .where(and(isNull(userProfiles.deletedAt), eq(userProfiles.id, id)));
+    if (!row) throw new NotFoundException(`Project ${id} not found`);
     return row;
   }
 
-  async findByEmail(email: string) {
-    const [row] = await this.db
-      .select()
-      .from(userProfiles)
-      .where(eq(userProfiles.email, email));
-    return row ?? null;
-  }
-
   async create(dto: CreateUserProfileDto) {
-    const [row] = await this.db
-      .insert(userProfiles)
-      .values(dto)
-      .returning();
+    const [row] = await this.db.insert(userProfiles).values(dto).returning();
     return row;
   }
 
@@ -56,7 +59,7 @@ export class UserProfilesService {
       .set({ ...dto, updatedAt: new Date() })
       .where(eq(userProfiles.id, id))
       .returning();
-    if (!row) throw new NotFoundException(`User profile ${id} not found`);
+    if (!row) throw new NotFoundException(`Project ${id} not found`);
     return row;
   }
 
@@ -66,7 +69,7 @@ export class UserProfilesService {
       .set({ deletedAt: new Date() })
       .where(eq(userProfiles.id, id))
       .returning();
-    if (!row) throw new NotFoundException(`User profile ${id} not found`);
+    if (!row) throw new NotFoundException(`Project ${id} not found`);
     return row;
   }
 }

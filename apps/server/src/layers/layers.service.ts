@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { layers } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreateLayerDto } from './dto/create-layer.dto';
@@ -14,7 +14,7 @@ export class LayersService {
       return this.db
         .select()
         .from(layers)
-        .where(eq(layers.projectId, projectId));
+        .where(and(isNull(layers.deletedAt), eq(layers.projectId, projectId)));
     }
     return this.db
       .select()
@@ -26,7 +26,7 @@ export class LayersService {
     const [row] = await this.db
       .select()
       .from(layers)
-      .where(eq(layers.id, id));
+      .where(and(isNull(layers.deletedAt), eq(layers.id, id)));
     if (!row) throw new NotFoundException(`Layer ${id} not found`);
     return row;
   }

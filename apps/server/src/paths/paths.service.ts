@@ -33,7 +33,7 @@ export class PathsService {
     const [row] = await this.db
       .select()
       .from(paths)
-      .where(eq(paths.id, id));
+      .where(and(isNull(paths.deletedAt), eq(paths.id, id)));
     if (!row) throw new NotFoundException(`Path ${id} not found`);
     return row;
   }
