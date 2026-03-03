@@ -54,6 +54,26 @@ interface DeckMapProps {
 
 export default function DeckMap({ geoData }: DeckMapProps) {
   const {
+    projects,
+    activeProject,
+    activeProjectId,
+    setActiveProject,
+    createProject,
+    renameProject,
+    deleteProject,
+  } = useProjects();
+
+  const {
+    layers,
+    getProjectLayers,
+    createLayer,
+    updateLayerName,
+    toggleLayerVisibility,
+    deleteLayer,
+    deleteProjectLayers,
+  } = useLayers(activeProjectId);
+
+  const {
     paths,
     pathsRef,
     pathCount,
@@ -67,30 +87,11 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     deletePath: deletePathRecord,
     removeNodes,
     dragNodes,
+    persistDraggedNodes,
     subdivideEdge,
     togglePathVisibility,
     movePathsToLayer,
-  } = usePaths();
-
-  const {
-    layers,
-    getProjectLayers,
-    createLayer,
-    updateLayerName,
-    toggleLayerVisibility,
-    deleteLayer,
-    deleteProjectLayers,
-  } = useLayers();
-
-  const {
-    projects,
-    activeProject,
-    activeProjectId,
-    setActiveProject,
-    createProject,
-    renameProject,
-    deleteProject,
-  } = useProjects();
+  } = usePaths(activeProjectId);
 
   // Drawing state
   const [activePath, setActivePath] = useState<Node[]>([]);
@@ -146,17 +147,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const projectLayerIds = new Set(projectLayers.map((l) => l.id));
   const projectPaths = paths.filter((p) => projectLayerIds.has(p.layerId));
 
-  // Sync activeLayerId when the active project changes
+  // Reset drawing/editing state when switching projects
   useEffect(() => {
-    if (!activeProjectId) {
-      setActiveLayerId("");
-      return;
-    }
-    const pLayers = layers.filter((l) => l.projectId === activeProjectId);
-    if (pLayers.length > 0 && !pLayers.find((l) => l.id === activeLayerId)) {
-      setActiveLayerId(pLayers[0].id);
-    }
-    // Reset drawing/editing state when switching projects
+    if (!activeProjectId) setActiveLayerId("");
     setIsDrawing(false);
     setExtendingPathId(null);
     setActivePath([]);
@@ -167,6 +160,17 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setSelectedNodeIds(new Set());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
+
+  // Sync activeLayerId whenever layers load or change — also covers the initial
+  // fetch for existing projects where layers arrive after activeProjectId is set.
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const pLayers = layers.filter((l) => l.projectId === activeProjectId);
+    if (pLayers.length > 0 && !pLayers.find((l) => l.id === activeLayerId)) {
+      setActiveLayerId(pLayers[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId, layers]);
 
   // Clear editingPathId if the path was deleted elsewhere
   useEffect(() => {
@@ -305,6 +309,10 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       return true;
     },
     onDragEnd: () => {
+      const pathId = editingPathIdRef.current;
+      if (pathId && dragStartNodeCoordsRef.current.size > 0) {
+        persistDraggedNodes(pathId);
+      }
       dragStartCoordRef.current = null;
       dragStartNodeCoordsRef.current = new Map();
       setIsDraggingNode(false);
@@ -641,9 +649,11 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   }
 
   function handleCreateProject(name: string) {
-    const projectId = createProject(name);
-    const layerId = createLayer("Default", projectId);
-    setActiveLayerId(layerId);
+    createProject(name, (realProjectId) => {
+      createLayer("Default", realProjectId, (realLayerId) => {
+        setActiveLayerId(realLayerId);
+      });
+    });
   }
 
   function handleDeleteProject(projectId: string) {

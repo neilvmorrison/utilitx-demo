@@ -3,6 +3,8 @@ import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/
 import { PathNodesService } from './path-nodes.service';
 import { CreatePathNodeDto } from './dto/create-path-node.dto';
 import { UpdatePathNodeDto } from './dto/update-path-node.dto';
+import { BatchCreatePathNodesDto } from './dto/batch-create-path-nodes.dto';
+import { BatchUpdatePathNodesDto } from './dto/batch-update-path-nodes.dto';
 
 @ApiTags('path-nodes')
 @Controller('path-nodes')
@@ -15,6 +17,20 @@ export class PathNodesController {
   @ApiResponse({ status: 200, description: 'Array of path nodes ordered by position' })
   findAll(@Query('pathId') pathId?: string) {
     return this.service.findAll(pathId);
+  }
+
+  @Post('batch')
+  @ApiOperation({ summary: 'Batch-create multiple path nodes in one request' })
+  @ApiResponse({ status: 201, description: 'Array of created path nodes' })
+  batchCreate(@Body() dto: BatchCreatePathNodesDto) {
+    return this.service.batchCreate(dto.nodes);
+  }
+
+  @Patch('batch')
+  @ApiOperation({ summary: 'Batch-update node positions (used after drag-end)' })
+  @ApiResponse({ status: 200, description: 'Array of updated path nodes' })
+  batchUpdate(@Body() dto: BatchUpdatePathNodesDto) {
+    return this.service.batchUpdate(dto.nodes);
   }
 
   @Get(':id')

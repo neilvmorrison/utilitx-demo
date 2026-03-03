@@ -1,6 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { eq, isNull } from 'drizzle-orm';
-import { paths } from '@utilitix/db';
+import { and, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { layers, paths } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreatePathDto } from './dto/create-path.dto';
 import { UpdatePathDto } from './dto/update-path.dto';
@@ -9,12 +9,19 @@ import { UpdatePathDto } from './dto/update-path.dto';
 export class PathsService {
   constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
 
-  async findAll(layerId?: string) {
+  async findAll(layerId?: string, projectId?: string) {
+    if (projectId) {
+      return this.db
+        .select(getTableColumns(paths))
+        .from(paths)
+        .innerJoin(layers, eq(paths.layerId, layers.id))
+        .where(and(eq(layers.projectId, projectId), isNull(paths.deletedAt)));
+    }
     if (layerId) {
       return this.db
         .select()
         .from(paths)
-        .where(eq(paths.layerId, layerId));
+        .where(and(eq(paths.layerId, layerId), isNull(paths.deletedAt)));
     }
     return this.db
       .select()

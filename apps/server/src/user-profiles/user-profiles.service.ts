@@ -34,6 +34,14 @@ export class UserProfilesService {
     return row;
   }
 
+  async findByEmail(email: string) {
+    const [row] = await this.db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.email, email));
+    return row ?? null;
+  }
+
   async create(dto: CreateUserProfileDto) {
     const [row] = await this.db
       .insert(userProfiles)

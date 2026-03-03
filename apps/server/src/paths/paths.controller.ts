@@ -10,11 +10,12 @@ export class PathsController {
   constructor(private readonly service: PathsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List paths, optionally filtered by layer' })
+  @ApiOperation({ summary: 'List paths, optionally filtered by layer or project' })
   @ApiQuery({ name: 'layerId', required: false, format: 'uuid' })
+  @ApiQuery({ name: 'projectId', required: false, format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Array of paths' })
-  findAll(@Query('layerId') layerId?: string) {
-    return this.service.findAll(layerId);
+  findAll(@Query('layerId') layerId?: string, @Query('projectId') projectId?: string) {
+    return this.service.findAll(layerId, projectId);
   }
 
   @Get(':id')

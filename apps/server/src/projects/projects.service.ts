@@ -2,8 +2,9 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { eq, isNull } from 'drizzle-orm';
 import { projects } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
-import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+
+type CreateProjectInput = { name: string; ownerId: string; organizationId: string };
 
 @Injectable()
 export class ProjectsService {
@@ -31,7 +32,7 @@ export class ProjectsService {
     return row;
   }
 
-  async create(dto: CreateProjectDto) {
+  async create(dto: CreateProjectInput) {
     const [row] = await this.db
       .insert(projects)
       .values(dto)

@@ -4,6 +4,7 @@ import { pathNodes } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreatePathNodeDto } from './dto/create-path-node.dto';
 import { UpdatePathNodeDto } from './dto/update-path-node.dto';
+import { BatchUpdateNodeDto } from './dto/batch-update-path-nodes.dto';
 
 @Injectable()
 export class PathNodesService {
@@ -37,6 +38,26 @@ export class PathNodesService {
       .values(dto)
       .returning();
     return row;
+  }
+
+  async batchCreate(nodes: CreatePathNodeDto[]) {
+    return this.db
+      .insert(pathNodes)
+      .values(nodes)
+      .returning();
+  }
+
+  async batchUpdate(nodes: BatchUpdateNodeDto[]) {
+    return Promise.all(
+      nodes.map((n) =>
+        this.db
+          .update(pathNodes)
+          .set({ point: n.point, updatedAt: new Date() })
+          .where(eq(pathNodes.id, n.id))
+          .returning()
+          .then(([row]) => row),
+      ),
+    );
   }
 
   async update(id: string, dto: UpdatePathNodeDto) {
