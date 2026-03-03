@@ -1,43 +1,36 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { loadFromStorage, saveToStorage } from "@/lib/storage";
 
 export type Layer = {
   id: string;
   name: string;
   isVisible: boolean;
+  projectId: string;
 };
 
+// Kept for backward compatibility with paths stored before the project model
 export const DEFAULT_LAYER_ID = "default";
 
 const STORAGE_KEY_LAYERS = "utilitix_layers";
 
-const DEFAULT_LAYER: Layer = {
-  id: DEFAULT_LAYER_ID,
-  name: "Default",
-  isVisible: true,
-};
-
 export function useLayers() {
-  const [layers, setLayers] = useState<Layer[]>(() => {
-    const stored = loadFromStorage<Layer[]>(STORAGE_KEY_LAYERS, [DEFAULT_LAYER]);
-    if (!stored.find((l) => l.id === DEFAULT_LAYER_ID)) {
-      return [DEFAULT_LAYER, ...stored];
-    }
-    return stored;
-  });
-
-  const layersRef = useRef<Layer[]>([]);
-  layersRef.current = layers;
+  const [layers, setLayers] = useState<Layer[]>(() =>
+    loadFromStorage<Layer[]>(STORAGE_KEY_LAYERS, []),
+  );
 
   useEffect(() => {
     saveToStorage(STORAGE_KEY_LAYERS, layers);
   }, [layers]);
 
-  function createLayer(name: string): string {
+  function getProjectLayers(projectId: string): Layer[] {
+    return layers.filter((l) => l.projectId === projectId);
+  }
+
+  function createLayer(name: string, projectId: string): string {
     const id = crypto.randomUUID();
-    setLayers((prev) => [...prev, { id, name, isVisible: true }]);
+    setLayers((prev) => [...prev, { id, name, isVisible: true, projectId }]);
     return id;
   }
 
@@ -54,16 +47,20 @@ export function useLayers() {
   }
 
   function deleteLayer(id: string) {
-    if (id === DEFAULT_LAYER_ID) return;
     setLayers((prev) => prev.filter((l) => l.id !== id));
+  }
+
+  function deleteProjectLayers(projectId: string) {
+    setLayers((prev) => prev.filter((l) => l.projectId !== projectId));
   }
 
   return {
     layers,
-    layersRef,
+    getProjectLayers,
     createLayer,
     updateLayerName,
     toggleLayerVisibility,
     deleteLayer,
+    deleteProjectLayers,
   };
 }

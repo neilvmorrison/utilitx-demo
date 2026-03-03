@@ -6,10 +6,13 @@ import type { CognitoJwtPayload } from '@nestjs-cognito/core';
 @Authentication()
 export class ExampleController {
   @Get('protected')
-  getProtected(@CognitoUser() user: CognitoJwtPayload) {
+  getProtected(@CognitoUser() user: CognitoJwtPayload): {
+    message: string;
+    username: string;
+  } {
     return {
       message: 'Authorized',
-      username: user.username,
+      username: user.username as string,
     };
   }
 }
