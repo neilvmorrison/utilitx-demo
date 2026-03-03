@@ -1,3 +1,5 @@
+import { WebStorageStateStore } from 'oidc-client-ts'
+
 const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? ''
 const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID ?? ''
 const region = process.env.NEXT_PUBLIC_COGNITO_REGION ?? ''
@@ -9,4 +11,5 @@ export const cognitoAuthConfig = {
 	redirect_uri: `${appUrl}/auth/callback`,
 	response_type: 'code' as const,
 	scope: 'email openid phone',
+	userStore: new WebStorageStateStore({ store: window.localStorage }),
 }

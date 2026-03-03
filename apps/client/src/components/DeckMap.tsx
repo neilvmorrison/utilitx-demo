@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useKeyboardListener } from "@/hooks/useKeyboardListener";
 import { useEventListener } from "@/hooks/useEventListener";
 import { usePaths } from "@/hooks/usePaths";
-import type { Node } from "@/hooks/usePaths";
-import { useLayers, DEFAULT_LAYER_ID } from "@/hooks/useLayers";
+import type { Node } from "@/lib/geometry/types";
+import { useLayers } from "@/hooks/useLayers";
+import { useProjects } from "@/hooks/useProjects";
 import { DeckGL } from "@deck.gl/react";
 import { Map as MapGL } from "react-map-gl/maplibre";
 import type { PickingInfo } from "@deck.gl/core";
@@ -31,14 +32,18 @@ import {
 } from "@/lib/drawingGeometry";
 import MapPanel from "./MapPanel";
 import LayersPanel from "./LayersPanel";
+import ProjectBar from "./ProjectBar";
 import NodeContextMenu from "./NodeContextMenu";
-import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
-import { loadFromStorage, saveToStorage } from "@/lib/storage";
+import { areNodesAdjacent } from "@/lib/geometry/subdivide-path";
+import {
+  useShareableViewState,
+  type IMapViewState,
+} from "@/hooks/useShareableViewState";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SNAP_RADIUS_PX = 20;
 
-const INITIAL_VIEW_STATE = {
+const INITIAL_VIEW_STATE: IMapViewState = {
   longitude: -79.3874715594294,
   latitude: 43.64118809154064,
   zoom: 14,
@@ -51,6 +56,36 @@ interface DeckMapProps {
 }
 
 export default function DeckMap({ geoData }: DeckMapProps) {
+  const {
+    projects,
+    activeProject,
+    activeProjectId,
+    setActiveProject,
+    createProject,
+    renameProject,
+    deleteProject,
+  } = useProjects();
+  const {
+    initialViewState,
+    handleViewStateChange,
+    getShareViewStateLink,
+    copyShareViewStateLink,
+  } = useShareableViewState({
+    fallbackViewState: INITIAL_VIEW_STATE,
+    activeProjectId,
+    setActiveProject,
+  });
+
+  const {
+    layers,
+    getProjectLayers,
+    createLayer,
+    updateLayerName,
+    toggleLayerVisibility,
+    deleteLayer,
+    deleteProjectLayers,
+  } = useLayers(activeProjectId);
+
   const {
     paths,
     pathsRef,
@@ -65,18 +100,11 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     deletePath: deletePathRecord,
     removeNodes,
     dragNodes,
+    persistDraggedNodes,
     subdivideEdge,
     togglePathVisibility,
     movePathsToLayer,
-  } = usePaths();
-
-  const {
-    layers,
-    createLayer,
-    updateLayerName,
-    toggleLayerVisibility,
-    deleteLayer,
-  } = useLayers();
+  } = usePaths(activeProjectId);
 
   // Drawing state
   const [activePath, setActivePath] = useState<Node[]>([]);
@@ -110,7 +138,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   const [extendingPathId, setExtendingPathId] = useState<string | null>(null);
 
   // Layers panel state
-  const [activeLayerId, setActiveLayerId] = useState<string>(DEFAULT_LAYER_ID);
+  const [activeLayerId, setActiveLayerId] = useState<string>("");
   const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
 
   // Refs for stable access inside drag/keyboard callbacks
@@ -126,6 +154,34 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   editingPathIdRef.current = editingPathId;
   selectedNodeIdsRef.current = selectedNodeIds;
   isDrawingRef.current = isDrawing;
+
+  // Derived project-scoped data
+  const projectLayers = activeProjectId ? getProjectLayers(activeProjectId) : [];
+  const projectLayerIds = new Set(projectLayers.map((l) => l.id));
+  const projectPaths = paths.filter((p) => projectLayerIds.has(p.layerId));
+
+  // Reset drawing/editing state when switching projects
+  useEffect(() => {
+    if (!activeProjectId) setActiveLayerId("");
+    setIsDrawing(false);
+    setExtendingPathId(null);
+    setActivePath([]);
+    setHoverCoord(null);
+    setIsSnapping(false);
+    setSnapIsFirstNode(false);
+    setEditingPathId(null);
+    setSelectedNodeIds(new Set());
+  }, [activeProjectId]);
+
+  // Sync activeLayerId whenever layers load or change — also covers the initial
+  // fetch for existing projects where layers arrive after activeProjectId is set.
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const pLayers = layers.filter((l) => l.projectId === activeProjectId);
+    if (pLayers.length > 0 && !pLayers.find((l) => l.id === activeLayerId)) {
+      setActiveLayerId(pLayers[0].id);
+    }
+  }, [activeProjectId, activeLayerId, layers]);
 
   // Clear editingPathId if the path was deleted elsewhere
   useEffect(() => {
@@ -264,6 +320,10 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       return true;
     },
     onDragEnd: () => {
+      const pathId = editingPathIdRef.current;
+      if (pathId && dragStartNodeCoordsRef.current.size > 0) {
+        persistDraggedNodes(pathId);
+      }
       dragStartCoordRef.current = null;
       dragStartNodeCoordsRef.current = new Map();
       setIsDraggingNode(false);
@@ -274,9 +334,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   // --- Layers ---
 
   const hiddenLayerIds = new Set(
-    layers.filter((l) => !l.isVisible).map((l) => l.id),
+    projectLayers.filter((l) => !l.isVisible).map((l) => l.id),
   );
-  const visiblePaths = paths.filter(
+  const visiblePaths = projectPaths.filter(
     (p) => !p.isHidden && !hiddenLayerIds.has(p.layerId),
   );
 
@@ -587,9 +647,29 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   }
 
   function handleDeleteLayer(layerId: string) {
-    movePathsToLayer(layerId, DEFAULT_LAYER_ID);
+    const layer = layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    const siblings = getProjectLayers(layer.projectId).filter(
+      (l) => l.id !== layerId,
+    );
+    if (siblings.length === 0) return; // cannot delete the last layer
+    const fallback = siblings[0];
+    movePathsToLayer(layerId, fallback.id);
     deleteLayer(layerId);
-    if (activeLayerId === layerId) setActiveLayerId(DEFAULT_LAYER_ID);
+    if (activeLayerId === layerId) setActiveLayerId(fallback.id);
+  }
+
+  function handleCreateProject(name: string) {
+    createProject(name, (realProjectId) => {
+      createLayer("Default", realProjectId, (realLayerId) => {
+        setActiveLayerId(realLayerId);
+      });
+    });
+  }
+
+  function handleDeleteProject(projectId: string) {
+    deleteProjectLayers(projectId);
+    deleteProject(projectId);
   }
 
   // --- Render ---
@@ -600,7 +680,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       onContextMenu={handleContextMenu}
     >
       <DeckGL
-        initialViewState={loadFromStorage("view-state", INITIAL_VIEW_STATE)}
+        initialViewState={initialViewState}
         controller={!isDraggingNode}
         layers={deckLayers}
         onClick={handleClick as (info: PickingInfo) => void}
@@ -613,10 +693,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
               : "grab"
         }
         style={{ position: "absolute", inset: "0" }}
-        onViewStateChange={({ viewState }) => {
-          saveToStorage("view-state", viewState);
-          return;
-        }}
+        onViewStateChange={({ viewState }) =>
+          handleViewStateChange(viewState as IMapViewState)
+        }
       >
         <MapGL mapStyle={MAP_STYLE} />
       </DeckGL>
@@ -660,78 +739,93 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         );
       })()}
 
-      <MapPanel
-        paths={paths}
-        pathCount={pathCount}
-        editingPathId={editingPathId}
-        selectedNodeIds={selectedNodeIds}
-        isDrawing={isDrawing}
-        activePath={activePath}
-        extendingPath={extendingPath}
-        isSnapping={isSnapping}
-        snapIsFirstNode={snapIsFirstNode}
-        pathName={pathName}
-        activeColor={activeColor}
-        activeWidth={activeWidth}
-        onPathNameChange={setPathName}
-        onColorChange={setActiveColor}
-        onWidthChange={setActiveWidth}
-        onStartDrawing={startDrawing}
-        onStartExtending={startExtending}
-        onCancelDrawing={cancelDrawing}
-        onFinishPath={() => finishPath(false)}
-        onFinishExtension={() => finishExtension(false)}
-        onClearEditing={() => {
-          setEditingPathId(null);
-          setSelectedNodeIds(new Set());
-        }}
-        onDeletePath={deletePath}
-        onUpdatePathName={updatePathName}
-        onUpdatePathColor={updatePathColor}
-        onUpdatePathWidth={updatePathWidth}
-        onUpdateNodeName={updateNodeName}
-        onUpdateNodeZ={updateNodeZ}
-        onTogglePathVisibility={togglePathVisibility}
+      <ProjectBar
+        projects={projects}
+        activeProject={activeProject}
+        onSelectProject={setActiveProject}
+        onCreateProject={handleCreateProject}
+        onRenameProject={renameProject}
+        onDeleteProject={handleDeleteProject}
+        onGetShareViewStateLink={getShareViewStateLink}
+        onCopyShareViewState={copyShareViewStateLink}
       />
 
-      {/* Layers toggle button — bottom-left */}
-      <button
-        onClick={() => setIsLayersPanelOpen((v) => !v)}
-        style={{
-          position: "absolute",
-          bottom: 16,
-          left: 16,
-          zIndex: 10,
-          background: isLayersPanelOpen
-            ? "rgba(30, 95, 168, 0.9)"
-            : "rgba(10, 14, 22, 0.88)",
-          border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 8,
-          color: "#fff",
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          padding: "7px 14px",
-          cursor: "pointer",
-          backdropFilter: "blur(10px)",
-          boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
-          userSelect: "none",
-        }}
-      >
-        ◧ Layers
-      </button>
+      {activeProject && (
+        <>
+          <MapPanel
+            paths={projectPaths}
+            pathCount={pathCount}
+            editingPathId={editingPathId}
+            selectedNodeIds={selectedNodeIds}
+            isDrawing={isDrawing}
+            activePath={activePath}
+            extendingPath={extendingPath}
+            isSnapping={isSnapping}
+            snapIsFirstNode={snapIsFirstNode}
+            pathName={pathName}
+            activeColor={activeColor}
+            activeWidth={activeWidth}
+            onPathNameChange={setPathName}
+            onColorChange={setActiveColor}
+            onWidthChange={setActiveWidth}
+            onStartDrawing={startDrawing}
+            onStartExtending={startExtending}
+            onCancelDrawing={cancelDrawing}
+            onFinishPath={() => finishPath(false)}
+            onFinishExtension={() => finishExtension(false)}
+            onClearEditing={() => {
+              setEditingPathId(null);
+              setSelectedNodeIds(new Set());
+            }}
+            onDeletePath={deletePath}
+            onUpdatePathName={updatePathName}
+            onUpdatePathColor={updatePathColor}
+            onUpdatePathWidth={updatePathWidth}
+            onUpdateNodeName={updateNodeName}
+            onUpdateNodeZ={updateNodeZ}
+            onTogglePathVisibility={togglePathVisibility}
+          />
 
-      {isLayersPanelOpen && (
-        <LayersPanel
-          layers={layers}
-          activeLayerId={activeLayerId}
-          paths={paths}
-          onSetActiveLayer={setActiveLayerId}
-          onCreateLayer={createLayer}
-          onUpdateLayerName={updateLayerName}
-          onToggleLayerVisibility={toggleLayerVisibility}
-          onDeleteLayer={handleDeleteLayer}
-        />
+          {/* Layers toggle button — bottom-left */}
+          <button
+            onClick={() => setIsLayersPanelOpen((v) => !v)}
+            style={{
+              position: "absolute",
+              bottom: 16,
+              left: 16,
+              zIndex: 10,
+              background: isLayersPanelOpen
+                ? "rgba(30, 95, 168, 0.9)"
+                : "rgba(10, 14, 22, 0.88)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 8,
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: "system-ui, -apple-system, sans-serif",
+              padding: "7px 14px",
+              cursor: "pointer",
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
+              userSelect: "none",
+            }}
+          >
+            ◧ Layers
+          </button>
+
+          {isLayersPanelOpen && (
+            <LayersPanel
+              layers={projectLayers}
+              activeLayerId={activeLayerId}
+              paths={projectPaths}
+              onSetActiveLayer={setActiveLayerId}
+              onCreateLayer={(name) => createLayer(name, activeProject.id)}
+              onUpdateLayerName={updateLayerName}
+              onToggleLayerVisibility={toggleLayerVisibility}
+              onDeleteLayer={handleDeleteLayer}
+            />
+          )}
+        </>
       )}
     </div>
   );

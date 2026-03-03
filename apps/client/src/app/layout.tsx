@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthWrapper from "@/components/AuthWrapper";
+import ReactQueryProvider from "@/components/ReactQueryProvider";
 
 export const metadata: Metadata = {
   title: "Utilitix Map",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body style={{ margin: 0, padding: 0, overflow: "hidden" }}>
-        <AuthWrapper>{children}</AuthWrapper>
+        <AuthWrapper>
+          <ReactQueryProvider>{children}</ReactQueryProvider>
+        </AuthWrapper>
       </body>
     </html>
   );
