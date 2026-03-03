@@ -91,25 +91,28 @@ importers:
     dependencies:
       '@nestjs-cognito/auth':
         specifier: ^2.5.1
-        version: 2.5.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))
+        version: 2.5.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))
       '@nestjs-cognito/core':
         specifier: ^2.4.1
-        version: 2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)
+        version: 2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)
       '@nestjs/common':
         specifier: ^11
-        version: 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core':
         specifier: ^11
-        version: 11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/platform-express':
         specifier: ^11
-        version: 11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)
+        version: 11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)
       '@nestjs/swagger':
         specifier: ^11.2.6
-        version: 11.2.6(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)(reflect-metadata@0.2.2)
+        version: 11.2.6(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)(class-validator@0.15.1)(reflect-metadata@0.2.2)
       '@utilitix/db':
         specifier: workspace:*
         version: link:../../packages/db
+      class-validator:
+        specifier: ^0.15.1
+        version: 0.15.1
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
@@ -2424,6 +2427,9 @@ packages:
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
+  '@types/validator@13.15.10':
+    resolution: {integrity: sha512-T8L6i7wCuyoK8A/ZeLYt1+q0ty3Zb9+qbSSvrIVitzT3YjZqkTZ40IbRsPanlB4h1QB3JVL1SYCdR6ngtFYcuA==}
+
   '@typescript-eslint/eslint-plugin@8.56.1':
     resolution: {integrity: sha512-Jz9ZztpB37dNC+HU2HI28Bs9QXpzCz+y/twHOwhyrIRdbuVDxSytJNDl6z/aAKlaRIwC7y8wJdkBv7FxYGgi0A==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -2981,6 +2987,9 @@ packages:
   chrome-trace-event@1.0.4:
     resolution: {integrity: sha512-rNjApaLzuwaOTjCiT8lSDdGN1APCiqkChLMJxJPWLunPAt5fy8xgU9/jNOchV84wfIxrA0lRQB7oCT8jrn/wrQ==}
     engines: {node: '>=6.0'}
+
+  class-validator@0.15.1:
+    resolution: {integrity: sha512-LqoS80HBBSCVhz/3KloUly0ovokxpdOLR++Al3J3+dHXWt9sTKlKd4eYtoxhxyUjoe5+UcIM+5k9MIxyBWnRTw==}
 
   cli-cursor@3.1.0:
     resolution: {integrity: sha512-I/zHAwsKf9FqGoXM4WWRACob9+SNukZTd94DWF57E4toouRulbCxcUh6RKUEOQlYTHJnzkPMySvPNaaSLNfLZw==}
@@ -4320,6 +4329,9 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
+  libphonenumber-js@1.12.38:
+    resolution: {integrity: sha512-vwzxmasAy9hZigxtqTbFEwp8ZdZ975TiqVDwj5bKx5sR+zi5ucUQy9mbVTkKM9GzqdLdxux/hTw2nmN5J7POMA==}
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -5507,6 +5519,10 @@ packages:
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
+
+  validator@13.15.26:
+    resolution: {integrity: sha512-spH26xU080ydGggxRyR1Yhcbgx+j3y5jbNXk/8L+iRvdIEQ4uTRH2Sgf2dokud6Q4oAtsbNvJ1Ft+9xmm6IZcA==}
+    engines: {node: '>= 0.10'}
 
   vary@1.1.2:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
@@ -7327,18 +7343,18 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@nestjs-cognito/auth@2.5.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))':
+  '@nestjs-cognito/auth@2.5.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))':
     dependencies:
-      '@nestjs-cognito/core': 2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs-cognito/core': 2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       aws-jwt-verify: 5.1.1
     transitivePeerDependencies:
       - '@aws-sdk/client-cognito-identity-provider'
 
-  '@nestjs-cognito/core@2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)':
+  '@nestjs-cognito/core@2.4.1(@aws-sdk/client-cognito-identity-provider@3.1000.0)(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(aws-jwt-verify@5.1.1)':
     dependencies:
       '@aws-sdk/client-cognito-identity-provider': 3.1000.0
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       aws-jwt-verify: 5.1.1
 
   '@nestjs/cli@11.0.16(@types/node@20.19.35)':
@@ -7367,7 +7383,7 @@ snapshots:
       - uglify-js
       - webpack-cli
 
-  '@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+  '@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
       file-type: 21.3.0
       iterare: 1.2.1
@@ -7376,12 +7392,14 @@ snapshots:
       rxjs: 7.8.2
       tslib: 2.8.1
       uid: 2.0.2
+    optionalDependencies:
+      class-validator: 0.15.1
     transitivePeerDependencies:
       - supports-color
 
-  '@nestjs/core@11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+  '@nestjs/core@11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nuxt/opencollective': 0.4.1
       fast-safe-stringify: 2.1.1
       iterare: 1.2.1
@@ -7391,17 +7409,19 @@ snapshots:
       tslib: 2.8.1
       uid: 2.0.2
     optionalDependencies:
-      '@nestjs/platform-express': 11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)
+      '@nestjs/platform-express': 11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)
 
-  '@nestjs/mapped-types@2.1.0(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)':
+  '@nestjs/mapped-types@2.1.0(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(class-validator@0.15.1)(reflect-metadata@0.2.2)':
     dependencies:
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
+    optionalDependencies:
+      class-validator: 0.15.1
 
-  '@nestjs/platform-express@11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)':
+  '@nestjs/platform-express@11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)':
     dependencies:
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core': 11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       cors: 2.8.6
       express: 5.2.1
       multer: 2.0.2
@@ -7421,17 +7441,19 @@ snapshots:
     transitivePeerDependencies:
       - chokidar
 
-  '@nestjs/swagger@11.2.6(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)(reflect-metadata@0.2.2)':
+  '@nestjs/swagger@11.2.6(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)(class-validator@0.15.1)(reflect-metadata@0.2.2)':
     dependencies:
       '@microsoft/tsdoc': 0.16.0
-      '@nestjs/common': 11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core': 11.1.14(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/mapped-types': 2.1.0(@nestjs/common@11.1.14(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)
+      '@nestjs/common': 11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core': 11.1.14(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.14)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/mapped-types': 2.1.0(@nestjs/common@11.1.14(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(class-validator@0.15.1)(reflect-metadata@0.2.2)
       js-yaml: 4.1.1
       lodash: 4.17.23
       path-to-regexp: 8.3.0
       reflect-metadata: 0.2.2
       swagger-ui-dist: 5.31.0
+    optionalDependencies:
+      class-validator: 0.15.1
 
   '@next/env@16.1.6': {}
 
@@ -8203,6 +8225,8 @@ snapshots:
 
   '@types/trusted-types@2.0.7': {}
 
+  '@types/validator@13.15.10': {}
+
   '@typescript-eslint/eslint-plugin@8.56.1(@typescript-eslint/parser@8.56.1(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3))(eslint@9.39.3(jiti@2.6.1))(typescript@5.9.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -8862,6 +8886,12 @@ snapshots:
       readdirp: 4.1.2
 
   chrome-trace-event@1.0.4: {}
+
+  class-validator@0.15.1:
+    dependencies:
+      '@types/validator': 13.15.10
+      libphonenumber-js: 1.12.38
+      validator: 13.15.26
 
   cli-cursor@3.1.0:
     dependencies:
@@ -9533,7 +9563,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.1.6
       eslint: 9.39.3(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.3(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.3(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.3(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.3(jiti@2.6.1))
@@ -9556,7 +9586,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.3(jiti@2.6.1)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -9571,13 +9601,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.3(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       eslint: 9.39.3(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.3(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -9592,7 +9622,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.3(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.3(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1)))(eslint@9.39.3(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -10342,6 +10372,8 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  libphonenumber-js@1.12.38: {}
 
   lie@3.3.0:
     dependencies:
@@ -11653,6 +11685,8 @@ snapshots:
       punycode: 2.3.1
 
   util-deprecate@1.0.2: {}
+
+  validator@13.15.26: {}
 
   vary@1.1.2: {}
 

@@ -4,8 +4,7 @@ import React from "react";
 import { ButtonVariant, ButtonSize, getButtonClasses } from "./Button";
 import Icon from "./Icon";
 
-export interface IconButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
@@ -31,7 +30,7 @@ export default function IconButton({
   // Build classes: use Button's variant/base classes but override sizing to square
   const variantBase = getButtonClasses(variant, size, false).replace(
     /px-\S+\s?|py-\S+\s?|h-\S+\s?/g,
-    ""
+    "",
   );
 
   const classes = [variantBase, squareSizeClasses[size], className ?? ""]
@@ -42,8 +41,8 @@ export default function IconButton({
     <button
       type="button"
       className={classes}
-      disabled={disabled}
-      aria-disabled={isLoading || undefined}
+      disabled={disabled || isLoading}
+      aria-disabled={disabled || isLoading || undefined}
       aria-busy={isLoading || undefined}
       {...rest}
     >

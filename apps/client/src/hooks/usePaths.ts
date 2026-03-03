@@ -75,14 +75,40 @@ export function usePaths(activeProjectId: string | null) {
     enabled: !!activeProjectId,
   });
 
+  const pathIds = rawPaths.map((p) => p.id);
+  const pathIdsKey = pathIds.join(",");
+
+  // Single-request prefetch: seeds per-path caches so useQueries doesn't fire N requests
+  const batchQuery = useQuery({
+    queryKey: ["path-nodes-batch", pathIdsKey],
+    queryFn: async () => {
+      if (pathIds.length === 0) return [];
+      const res = await api.post<ApiPathNode[]>("/path-nodes/batch-fetch", {
+        pathIds,
+      });
+      const grouped: Record<string, ApiPathNode[]> = {};
+      for (const node of res.data) (grouped[node.pathId] ??= []).push(node);
+      for (const id of pathIds)
+        queryClient.setQueryData(queryKeys.pathNodes(id), grouped[id] ?? []);
+      return res.data;
+    },
+    enabled: pathIds.length > 0,
+  });
+
+  // Per-path observers: reactive to setQueryData (optimistic updates), gated on batch
   const nodeQueries = useQueries({
-    queries: rawPaths.map((p) => ({
-      queryKey: queryKeys.pathNodes(p.id),
-      queryFn: async () => {
-        const res = await api.get<ApiPathNode[]>(`/path-nodes?pathId=${p.id}`);
-        return res.data;
-      },
-    })),
+    queries: batchQuery.data
+      ? rawPaths.map((p) => ({
+          queryKey: queryKeys.pathNodes(p.id),
+          queryFn: async () => {
+            const res = await api.get<ApiPathNode[]>(
+              `/path-nodes?pathId=${p.id}`,
+            );
+            return res.data;
+          },
+          staleTime: 30_000,
+        }))
+      : [],
   });
 
   const nodeQueriesKey = nodeQueries.map((q) => q.dataUpdatedAt).join("-");

@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { pathNodes } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreatePathNodeDto } from './dto/create-path-node.dto';
@@ -21,6 +21,16 @@ export class PathNodesService {
       .select()
       .from(pathNodes)
       .where(isNull(pathNodes.deletedAt));
+  }
+
+  async findByPathIds(pathIds: string[]) {
+    if (pathIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(pathNodes)
+      .where(
+        and(isNull(pathNodes.deletedAt), inArray(pathNodes.pathId, pathIds)),
+      );
   }
 
   async findOne(id: string) {

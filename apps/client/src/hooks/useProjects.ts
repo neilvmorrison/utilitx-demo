@@ -33,17 +33,17 @@ export function useProjects() {
   const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
 
   const createProjectMutation = useMutation({
-    mutationFn: (name: string) =>
+    mutationFn: ({ name }: { name: string; tempId: string }) =>
       api.post<ApiProject>("/projects", { name }).then((r) => r.data),
-    onMutate: async (name) => {
+    onMutate: async ({ name, tempId }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.projects() });
       const snapshot = queryClient.getQueryData<Project[]>(queryKeys.projects());
-      const optimistic: Project = { id: crypto.randomUUID(), name };
+      const optimistic: Project = { id: tempId, name };
       queryClient.setQueryData<Project[]>(queryKeys.projects(), (old = []) => [
         ...old,
         optimistic,
       ]);
-      return { snapshot, optimisticId: optimistic.id };
+      return { snapshot, optimisticId: tempId };
     },
     onSuccess: (created, _, ctx) => {
       // Replace optimistic record with server-confirmed one and update active project
@@ -112,7 +112,7 @@ export function useProjects() {
     const tempId = crypto.randomUUID();
     // Set active project optimistically before mutation resolves
     setActiveProject(tempId);
-    createProjectMutation.mutate(name, {
+    createProjectMutation.mutate({ name, tempId }, {
       onSuccess: (created) => {
         setActiveProject(created.id);
         onCreated?.(created.id);

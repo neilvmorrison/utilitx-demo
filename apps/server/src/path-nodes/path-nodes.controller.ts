@@ -5,6 +5,7 @@ import { CreatePathNodeDto } from './dto/create-path-node.dto';
 import { UpdatePathNodeDto } from './dto/update-path-node.dto';
 import { BatchCreatePathNodesDto } from './dto/batch-create-path-nodes.dto';
 import { BatchUpdatePathNodesDto } from './dto/batch-update-path-nodes.dto';
+import { BatchFetchPathNodesDto } from './dto/batch-fetch-path-nodes.dto';
 
 @ApiTags('path-nodes')
 @Controller('path-nodes')
@@ -24,6 +25,13 @@ export class PathNodesController {
   @ApiResponse({ status: 201, description: 'Array of created path nodes' })
   batchCreate(@Body() dto: BatchCreatePathNodesDto) {
     return this.service.batchCreate(dto.nodes);
+  }
+
+  @Post('batch-fetch')
+  @ApiOperation({ summary: 'Fetch nodes for multiple paths in a single request' })
+  @ApiResponse({ status: 200, description: 'Array of path nodes for the given path IDs' })
+  batchFetch(@Body() dto: BatchFetchPathNodesDto) {
+    return this.service.findByPathIds(dto.pathIds);
   }
 
   @Patch('batch')
