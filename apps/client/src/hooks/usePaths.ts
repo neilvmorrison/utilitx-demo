@@ -6,62 +6,11 @@ import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import type { ApiPath, ApiPathNode } from "@/lib/api-types";
 import api from "@/lib/api";
-import { insertSubdivisionNode } from "@/lib/geometry-operations/subdivide-path";
+import { insertSubdivisionNode } from "@/lib/geometry/subdivide-path";
+import { mergePaths } from "@/lib/geometry/node-mapping";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 
-export type Node = {
-  id: string;
-  name: string;
-  coords: [number, number];
-  z: number;
-};
-
-export type DrawnPath = {
-  id: string;
-  name: string;
-  nodes: Node[];
-  color: string;
-  width: number;
-  isClosed: boolean;
-  layerId: string;
-  isHidden: boolean;
-};
-
-function apiNodeToNode(n: ApiPathNode): Node {
-  return {
-    id: n.id,
-    name: n.name,
-    coords: [n.point.lng, n.point.lat],
-    z: n.point.z,
-  };
-}
-
-function isValidApiNodePoint(point: ApiPathNode["point"] | undefined): point is ApiPathNode["point"] {
-  if (!point) return false;
-  return (
-    Number.isFinite(point.lng) &&
-    Number.isFinite(point.lat) &&
-    Number.isFinite(point.z)
-  );
-}
-
-function mergePaths(
-  rawPaths: ApiPath[],
-  nodeQueries: { data?: ApiPathNode[] }[],
-): DrawnPath[] {
-  return rawPaths.map((p, i) => ({
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    width: p.width,
-    isClosed: p.isClosed,
-    isHidden: p.isHidden,
-    layerId: p.layerId,
-    nodes: (nodeQueries[i]?.data ?? [])
-      .filter((n) => isValidApiNodePoint(n.point))
-      .sort((a, b) => a.position - b.position)
-      .map(apiNodeToNode),
-  }));
-}
+export type { Node, DrawnPath } from "@/lib/geometry/types";
 
 export function usePaths(activeProjectId: string | null) {
   const { data: rawPaths = [] } = useQuery<ApiPath[]>({

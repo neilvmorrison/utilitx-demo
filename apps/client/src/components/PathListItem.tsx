@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { DrawnPath } from "@/hooks/usePaths";
+import type { DrawnPath } from "@/lib/geometry/types";
 import {
   computeClosedPathAreaMeters,
   computeOpenPathLengthMeters,

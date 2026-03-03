@@ -1,4 +1,4 @@
-import type { Node } from "@/hooks/usePaths";
+import type { Node } from "./types";
 
 const WEB_MERCATOR_RADIUS_METERS = 6378137;
 const DEGREE_TO_RAD = Math.PI / 180;

@@ -1,4 +1,4 @@
-import type { Node, DrawnPath } from "@/hooks/usePaths";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 
 /**
  * Builds the coordinate array for the active path display.

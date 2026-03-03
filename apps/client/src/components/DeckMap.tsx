@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useKeyboardListener } from "@/hooks/useKeyboardListener";
 import { useEventListener } from "@/hooks/useEventListener";
 import { usePaths } from "@/hooks/usePaths";
-import type { Node } from "@/hooks/usePaths";
+import type { Node } from "@/lib/geometry/types";
 import { useLayers } from "@/hooks/useLayers";
 import { useProjects } from "@/hooks/useProjects";
 import { DeckGL } from "@deck.gl/react";
@@ -34,7 +34,7 @@ import MapPanel from "./MapPanel";
 import LayersPanel from "./LayersPanel";
 import ProjectBar from "./ProjectBar";
 import NodeContextMenu from "./NodeContextMenu";
-import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
+import { areNodesAdjacent } from "@/lib/geometry/subdivide-path";
 import {
   useShareableViewState,
   type IMapViewState,

@@ -1,6 +1,6 @@
 import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
-import type { Node, DrawnPath } from "@/hooks/usePaths";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 
 // ---------------------------------------------------------------------------
 // Utilities

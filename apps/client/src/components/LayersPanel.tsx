@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Layer } from "@/hooks/useLayers";
-import type { DrawnPath } from "@/hooks/usePaths";
+import type { DrawnPath } from "@/lib/geometry/types";
 
 interface LayersPanelProps {
   layers: Layer[];

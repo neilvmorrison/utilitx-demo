@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Node, DrawnPath } from "@/hooks/usePaths";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 import { UTILITY_PRESETS } from "@/constants";
 import PathListItem from "./PathListItem";
 
