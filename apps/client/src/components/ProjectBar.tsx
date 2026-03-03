@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Project } from "@/hooks/useProjects";
 import Popover from "@/components/ui/disclosure/Popover";
+import { Icon, IconButton } from "./ui";
 
 interface IEmailRecipient {
   id: string;
@@ -62,7 +63,8 @@ export default function ProjectBar({
   function addEmailRecipient() {
     const trimmed = emailInput.trim();
     if (!trimmed || !trimmed.includes("@")) return;
-    if (emailRecipients.some((recipient) => recipient.email === trimmed)) return;
+    if (emailRecipients.some((recipient) => recipient.email === trimmed))
+      return;
     setEmailRecipients((prev) => [
       ...prev,
       { id: crypto.randomUUID(), email: trimmed },
@@ -71,7 +73,9 @@ export default function ProjectBar({
   }
 
   function removeEmailRecipient(id: string) {
-    setEmailRecipients((prev) => prev.filter((recipient) => recipient.id !== id));
+    setEmailRecipients((prev) =>
+      prev.filter((recipient) => recipient.id !== id),
+    );
   }
 
   async function handleCopyShareLink() {
@@ -120,7 +124,9 @@ export default function ProjectBar({
             textAlign: "left",
           }}
         >
-          <span style={{ color: "#3a7bd5", fontSize: 14, flexShrink: 0 }}>◈</span>
+          <span style={{ color: "#3a7bd5", fontSize: 14, flexShrink: 0 }}>
+            ◈
+          </span>
           <span style={{ flex: 1 }}>
             {activeProject ? activeProject.name : "Select project…"}
           </span>
@@ -133,9 +139,9 @@ export default function ProjectBar({
           isOpen={isSharePopoverOpen}
           onClose={() => setIsSharePopoverOpen(false)}
           trigger={
-            <button
+            <IconButton
               onClick={() => setIsSharePopoverOpen((prev) => !prev)}
-              title="Share this view"
+              icon={<Icon icon="share" />}
               aria-label="Share this view"
               style={{
                 ...panelStyle,
@@ -148,24 +154,7 @@ export default function ProjectBar({
                 cursor: "pointer",
                 color: isCopied ? "#3a7bd5" : "#ddd",
               }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                width="16"
-                height="16"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M7 12a3 3 0 1 0 2.83-2H14.2a3 3 0 1 0 0 4H9.83A3 3 0 1 0 7 12z"
-                />
-              </svg>
-            </button>
+            />
           }
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -268,7 +257,13 @@ export default function ProjectBar({
               }}
             />
 
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
               <button
                 disabled
                 style={{

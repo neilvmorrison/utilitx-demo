@@ -51,7 +51,7 @@ export default function IconButton({
           aria-label="Loading"
           size={size === "sm" ? 12 : size === "lg" ? 18 : 14}
           className="animate-spin"
-          name="close"
+          icon="close"
         />
       ) : (
         icon
