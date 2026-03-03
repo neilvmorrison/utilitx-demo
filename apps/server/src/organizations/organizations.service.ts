@@ -1,55 +1,34 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
-import { organizations } from '@utilitix/db';
-import { DRIZZLE, DrizzleDB } from '../drizzle';
+import { Injectable } from '@nestjs/common';
+import { OrganizationsRepository } from '../database/organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 
 @Injectable()
 export class OrganizationsService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(private readonly repo: OrganizationsRepository) {}
 
   async findAll() {
-    return this.db
-      .select()
-      .from(organizations)
-      .where(isNull(organizations.deletedAt));
+    return this.repo.findAll();
   }
 
   async findOne(id: string) {
-    const [row] = await this.db
-      .select()
-      .from(organizations)
-      .where(and(isNull(organizations.deletedAt), eq(organizations.id, id)));
-    if (!row) throw new NotFoundException(`Organization ${id} not found`);
-    return row;
+    return this.repo.findOne(id);
   }
 
   async create(dto: CreateOrganizationDto) {
-    const [row] = await this.db
-      .insert(organizations)
-      .values(dto)
-      .returning();
-    return row;
+    return this.repo.create(dto);
   }
 
   async update(id: string, dto: UpdateOrganizationDto) {
-    const [row] = await this.db
-      .update(organizations)
-      .set({ ...dto, updatedAt: new Date() })
-      .where(eq(organizations.id, id))
-      .returning();
-    if (!row) throw new NotFoundException(`Organization ${id} not found`);
-    return row;
+    return this.repo.update(id, dto);
   }
 
   async remove(id: string) {
-    const [row] = await this.db
-      .update(organizations)
-      .set({ deletedAt: new Date() })
-      .where(eq(organizations.id, id))
-      .returning();
-    if (!row) throw new NotFoundException(`Organization ${id} not found`);
-    return row;
+    return this.repo.remove(id);
+  }
+
+  /** Returns the first active org, or creates a default one. Used for auto-provisioning new users. */
+  async findFirstOrCreateDefault() {
+    return this.repo.findFirstOrCreateDefault();
   }
 }
