@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -94,6 +94,17 @@ export function usePaths(activeProjectId: string | null) {
 
   const pathsRef = useRef<DrawnPath[]>([]);
   pathsRef.current = paths;
+
+  const pendingNodeUpdatesRef = useRef(
+    new Map<
+      string,
+      {
+        timer: ReturnType<typeof setTimeout>;
+        nodes: { id: string; point: ApiPathNode["point"] }[];
+      }
+    >(),
+  );
+  const NODE_WRITE_DEBOUNCE_MS = 500;
 
   // Path count for default naming (e.g. "Path 3")
   const pathCount = paths.length + 1;
@@ -372,6 +383,7 @@ export function usePaths(activeProjectId: string | null) {
   }
 
   function deletePath(id: string) {
+    flushPendingNodeUpdate(id);
     if (activeProjectId) {
       queryClient.setQueryData<ApiPath[]>(
         queryKeys.paths(activeProjectId),
@@ -439,13 +451,54 @@ export function usePaths(activeProjectId: string | null) {
     );
   }
 
+  function flushPendingNodeUpdate(pathId: string) {
+    const entry = pendingNodeUpdatesRef.current.get(pathId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingNodeUpdatesRef.current.delete(pathId);
+    batchUpdateNodesMutation.mutate(entry.nodes);
+  }
+
+  function cancelPendingNodeUpdate(pathId: string) {
+    const entry = pendingNodeUpdatesRef.current.get(pathId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingNodeUpdatesRef.current.delete(pathId);
+  }
+
+  function queuePendingNodeUpdate(
+    pathId: string,
+    nodes: { id: string; point: ApiPathNode["point"] }[],
+  ) {
+    const existing = pendingNodeUpdatesRef.current.get(pathId);
+    if (existing) {
+      clearTimeout(existing.timer);
+    }
+    const timer = setTimeout(() => {
+      flushPendingNodeUpdate(pathId);
+    }, NODE_WRITE_DEBOUNCE_MS);
+    pendingNodeUpdatesRef.current.set(pathId, { timer, nodes });
+  }
+
+  useEffect(() => {
+    return () => {
+      for (const pathId of Array.from(pendingNodeUpdatesRef.current.keys())) {
+        flushPendingNodeUpdate(pathId);
+      }
+    };
+  }, []);
+
   // Call from onDragEnd to persist the final node positions to the server.
   function persistDraggedNodes(pathId: string) {
     const nodes =
       queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
       [];
-    if (nodes.length === 0) return;
-    batchUpdateNodesMutation.mutate(
+    if (nodes.length === 0) {
+      cancelPendingNodeUpdate(pathId);
+      return;
+    }
+    queuePendingNodeUpdate(
+      pathId,
       nodes.map((n) => ({ id: n.id, point: n.point })),
     );
   }
