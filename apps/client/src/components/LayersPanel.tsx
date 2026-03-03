@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import type { Layer } from "@/hooks/useLayers";
-import { DEFAULT_LAYER_ID } from "@/hooks/useLayers";
-import type { DrawnPath } from "@/hooks/usePaths";
+import type { DrawnPath } from "@/lib/geometry/types";
 
 interface LayersPanelProps {
   layers: Layer[];
@@ -84,7 +83,6 @@ export default function LayersPanel({
         {layers.map((layer) => {
           const pathCount = paths.filter((p) => p.layerId === layer.id).length;
           const isActive = layer.id === activeLayerId;
-          const isDefault = layer.id === DEFAULT_LAYER_ID;
 
           return (
             <div
@@ -163,8 +161,8 @@ export default function LayersPanel({
                 {layer.isVisible ? "●" : "◌"}
               </button>
 
-              {/* Delete — hidden for Default layer */}
-              {!isDefault && (
+              {/* Delete — hidden when only one layer remains */}
+              {layers.length > 1 && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

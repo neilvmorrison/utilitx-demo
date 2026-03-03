@@ -1,6 +1,6 @@
 import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
 import type { PickingInfo } from "@deck.gl/core";
-import type { Node, DrawnPath } from "@/hooks/usePaths";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 
 // ---------------------------------------------------------------------------
 // Utilities
@@ -15,6 +15,7 @@ export function hexToRgb(hex: string): [number, number, number] {
 }
 
 export function computeCentroid(nodes: Node[]): [number, number] {
+  if (nodes.length === 0) return [0, 0];
   const lon = nodes.reduce((sum, n) => sum + n.coords[0], 0) / nodes.length;
   const lat = nodes.reduce((sum, n) => sum + n.coords[1], 0) / nodes.length;
   return [lon, lat];
@@ -62,12 +63,16 @@ export function buildPathsLayer(
   paths: DrawnPath[],
   editingPathId: string | null,
 ): GeoJsonLayer | null {
-  if (paths.length === 0) return null;
+  const visiblePaths = paths.filter((p) => {
+    const nodeCount = p.nodes.length;
+    return p.isClosed ? nodeCount >= 3 : nodeCount >= 2;
+  });
+  if (visiblePaths.length === 0) return null;
   return new GeoJsonLayer({
     id: "drawn-paths",
     data: {
       type: "FeatureCollection" as const,
-      features: paths.map((p, i) => ({
+      features: visiblePaths.map((p, i) => ({
         type: "Feature" as const,
         geometry: p.isClosed
           ? ({
@@ -129,9 +134,9 @@ export function buildPathsLayer(
     autoHighlight: !editingPathId,
     highlightColor: [255, 255, 255, 40],
     updateTriggers: {
-      getLineColor: [paths.map((p) => p.color), editingPathId],
-      getFillColor: [paths.map((p) => p.color), editingPathId],
-      getLineWidth: [paths.map((p) => p.width), editingPathId],
+      getLineColor: [visiblePaths.map((p) => p.color), editingPathId],
+      getFillColor: [visiblePaths.map((p) => p.color), editingPathId],
+      getLineWidth: [visiblePaths.map((p) => p.width), editingPathId],
     },
   });
 }
@@ -372,10 +377,11 @@ export function buildEditNodesLayer(
 export function buildClosedAreaLabelsLayer(
   paths: DrawnPath[],
 ): TextLayer | null {
-  if (!paths.some((p) => p.isClosed)) return null;
+  const closedPathsWithNodes = paths.filter((p) => p.isClosed && p.nodes.length > 0);
+  if (closedPathsWithNodes.length === 0) return null;
   return new TextLayer({
     id: "closed-area-labels",
-    data: paths.filter((p) => p.isClosed),
+    data: closedPathsWithNodes,
     getPosition: (p: DrawnPath) => computeCentroid(p.nodes),
     getText: (p: DrawnPath) => p.name,
     getColor: (p: DrawnPath) =>
@@ -390,9 +396,9 @@ export function buildClosedAreaLabelsLayer(
     getTextAnchor: "middle" as const,
     getAlignmentBaseline: "center" as const,
     updateTriggers: {
-      getPosition: [paths.map((p) => p.nodes)],
-      getText: [paths.map((p) => p.name)],
-      getColor: [paths.map((p) => p.color)],
+      getPosition: [closedPathsWithNodes.map((p) => p.nodes)],
+      getText: [closedPathsWithNodes.map((p) => p.name)],
+      getColor: [closedPathsWithNodes.map((p) => p.color)],
     },
   });
 }

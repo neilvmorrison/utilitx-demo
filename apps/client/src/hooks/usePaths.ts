@@ -1,187 +1,550 @@
-import { useState, useRef, useEffect } from "react";
-import { loadFromStorage, saveToStorage } from "@/lib/storage";
-import { insertSubdivisionNode } from "@/lib/geometry-operations/subdivide-path";
-import { DEFAULT_LAYER_ID } from "@/hooks/useLayers";
+"use client";
 
-export type Node = {
-  id: string;
-  name: string;
-  coords: [number, number];
-  z: number;
-};
+import { useEffect, useRef, useMemo } from "react";
+import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
+import type { ApiPath, ApiPathNode } from "@/lib/api-types";
+import api from "@/lib/api";
+import { insertSubdivisionNode } from "@/lib/geometry/subdivide-path";
+import { mergePaths } from "@/lib/geometry/node-mapping";
+import type { Node, DrawnPath } from "@/lib/geometry/types";
 
-export type DrawnPath = {
-  id: string;
-  name: string;
-  nodes: Node[];
-  color: string;
-  width: number;
-  isClosed: boolean;
-  layerId: string;
-  isHidden: boolean;
-};
+export type { Node, DrawnPath } from "@/lib/geometry/types";
 
-const STORAGE_KEY_PATHS = "utilitix_paths";
-const STORAGE_KEY_PATH_COUNT = "utilitix_pathCount";
-
-export function usePaths() {
-  const [paths, setPaths] = useState<DrawnPath[]>(() => {
-    const raw = loadFromStorage<DrawnPath[]>(STORAGE_KEY_PATHS, []);
-    return raw.map((p) => ({
-      ...p,
-      layerId: (p as { layerId?: string }).layerId ?? DEFAULT_LAYER_ID,
-      isHidden: (p as { isHidden?: boolean }).isHidden ?? false,
-    }));
+export function usePaths(activeProjectId: string | null) {
+  const { data: rawPaths = [] } = useQuery<ApiPath[]>({
+    queryKey: queryKeys.paths(activeProjectId ?? ""),
+    queryFn: async () => {
+      const res = await api.get<ApiPath[]>(
+        `/paths?projectId=${activeProjectId}`,
+      );
+      return res.data;
+    },
+    enabled: !!activeProjectId,
   });
-  const [pathCount, setPathCount] = useState<number>(() =>
-    loadFromStorage<number>(STORAGE_KEY_PATH_COUNT, 1),
+
+  const pathIds = rawPaths.map((p) => p.id);
+  const pathIdsKey = pathIds.join(",");
+
+  // Single-request prefetch: seeds per-path caches so useQueries doesn't fire N requests
+  const batchQuery = useQuery({
+    queryKey: ["path-nodes-batch", pathIdsKey],
+    queryFn: async () => {
+      if (pathIds.length === 0) return [];
+      const res = await api.post<ApiPathNode[]>("/path-nodes/batch-fetch", {
+        pathIds,
+      });
+      const grouped: Record<string, ApiPathNode[]> = {};
+      for (const node of res.data) (grouped[node.pathId] ??= []).push(node);
+      for (const id of pathIds)
+        queryClient.setQueryData(queryKeys.pathNodes(id), grouped[id] ?? []);
+      return res.data;
+    },
+    enabled: pathIds.length > 0,
+  });
+
+  // Per-path observers: reactive to setQueryData (optimistic updates), gated on batch
+  const nodeQueries = useQueries({
+    queries: batchQuery.data
+      ? rawPaths.map((p) => ({
+          queryKey: queryKeys.pathNodes(p.id),
+          queryFn: async () => {
+            const res = await api.get<ApiPathNode[]>(
+              `/path-nodes?pathId=${p.id}`,
+            );
+            return res.data;
+          },
+          staleTime: 30_000,
+        }))
+      : [],
+  });
+
+  const nodeQueriesKey = nodeQueries.map((q) => q.dataUpdatedAt).join("-");
+  const paths = useMemo(
+    () => mergePaths(rawPaths, nodeQueries),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawPaths, nodeQueriesKey],
   );
-  // Ref kept in sync so drag/keyboard callbacks can read the latest paths
-  // without capturing stale closures
+
   const pathsRef = useRef<DrawnPath[]>([]);
   pathsRef.current = paths;
 
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY_PATHS, paths);
-  }, [paths]);
+  const pendingNodeUpdatesRef = useRef(
+    new Map<
+      string,
+      {
+        timer: ReturnType<typeof setTimeout>;
+        nodes: { id: string; point: ApiPathNode["point"] }[];
+      }
+    >(),
+  );
+  const NODE_WRITE_DEBOUNCE_MS = 500;
 
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY_PATH_COUNT, pathCount);
-  }, [pathCount]);
+  // Path count for default naming (e.g. "Path 3")
+  const pathCount = paths.length + 1;
 
-  function createPath(
-    nodes: Node[],
-    opts: { name: string; color: string; width: number; isClosed: boolean; layerId: string },
-  ) {
-    setPaths((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), isHidden: false, ...opts, nodes },
-    ]);
-    setPathCount((n) => n + 1);
+  function invalidatePaths() {
+    if (activeProjectId) {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.paths(activeProjectId),
+      });
+    }
   }
 
-  // Append newNodes to an existing path, optionally marking it closed.
-  // Pass extraCoord to snap-append a final node before finishing.
-  function extendPath(pathId: string, newNodes: Node[], isClosed: boolean) {
-    setPaths((prev) =>
-      prev.map((p) => {
-        if (p.id !== pathId) return p;
-        const allNodes = [...p.nodes, ...newNodes];
-        return {
-          ...p,
-          nodes: allNodes,
-          isClosed: isClosed && allNodes.length >= 3,
-        };
-      }),
+  function getNodePoint(pathId: string, nodeId: string) {
+    const cached =
+      queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
+      [];
+    return (
+      cached.find((n) => n.id === nodeId)?.point ?? { lng: 0, lat: 0, z: 0 }
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Path-level mutations
+  // ---------------------------------------------------------------------------
+
+  const batchUpdateNodesMutation = useMutation({
+    mutationFn: (
+      nodes: { id: string; point: { lng: number; lat: number; z: number } }[],
+    ) => api.patch("/path-nodes/batch", { nodes }).then((r) => r.data),
+  });
+
+  const updatePathMutation = useMutation<
+    ApiPath,
+    Error,
+    { id: string } & Partial<ApiPath>
+  >({
+    mutationFn: ({ id, ...patch }) =>
+      api.patch<ApiPath>(`/paths/${id}`, patch).then((r) => r.data),
+    onMutate: async ({ id, ...patch }) => {
+      if (!activeProjectId) return;
+      const key = queryKeys.paths(activeProjectId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const snapshot = queryClient.getQueryData<ApiPath[]>(key);
+      queryClient.setQueryData<ApiPath[]>(key, (old = []) =>
+        old.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      );
+      return { snapshot };
+    },
+    onError: (_, __, ctx) => {
+      const snap = (ctx as { snapshot?: ApiPath[] } | undefined)?.snapshot;
+      if (snap && activeProjectId) {
+        queryClient.setQueryData(queryKeys.paths(activeProjectId), snap);
+      }
+    },
+    onSettled: () => invalidatePaths(),
+  });
+
+  const updateNodeMutation = useMutation<
+    ApiPathNode,
+    Error,
+    { id: string; pathId: string } & Partial<ApiPathNode>
+  >({
+    mutationFn: ({ id, pathId: _pathId, ...patch }) =>
+      api.patch<ApiPathNode>(`/path-nodes/${id}`, patch).then((r) => r.data),
+    onMutate: async ({ id, pathId, ...patch }) => {
+      const key = queryKeys.pathNodes(pathId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const snapshot = queryClient.getQueryData<ApiPathNode[]>(key);
+      queryClient.setQueryData<ApiPathNode[]>(key, (old = []) =>
+        old.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+      );
+      return { snapshot, pathId };
+    },
+    onError: (_, vars, ctx) => {
+      const snap = (ctx as { snapshot?: ApiPathNode[] } | undefined)?.snapshot;
+      if (snap) {
+        queryClient.setQueryData(queryKeys.pathNodes(vars.pathId), snap);
+      }
+    },
+    onSettled: (_, __, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pathNodes(vars.pathId),
+      });
+    },
+  });
+
+  // ---------------------------------------------------------------------------
+  // Public API — same shape as the old localStorage hook
+  // ---------------------------------------------------------------------------
+
+  async function createPath(
+    nodes: Node[],
+    opts: {
+      name: string;
+      color: string;
+      width: number;
+      isClosed: boolean;
+      layerId: string;
+    },
+  ) {
+    const tempId = crypto.randomUUID();
+
+    // Optimistic: add path + empty nodes immediately
+    if (activeProjectId) {
+      const now = new Date().toISOString();
+      queryClient.setQueryData<ApiPath[]>(
+        queryKeys.paths(activeProjectId),
+        (old = []) => [
+          ...old,
+          {
+            id: tempId,
+            ...opts,
+            isHidden: false,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ],
+      );
+      queryClient.setQueryData<ApiPathNode[]>(queryKeys.pathNodes(tempId), []);
+    }
+
+    try {
+      const created = await api
+        .post<ApiPath>("/paths", {
+          name: opts.name,
+          layerId: opts.layerId,
+          color: opts.color,
+          width: opts.width,
+          isClosed: opts.isClosed,
+        })
+        .then((r) => r.data);
+
+      const apiNodes = nodes.map((n, i) => ({
+        name: n.name,
+        position: i,
+        pathId: created.id,
+        point: { lng: n.coords[0], lat: n.coords[1], z: n.z },
+      }));
+
+      const createdNodes = await api
+        .post<ApiPathNode[]>("/path-nodes/batch", { nodes: apiNodes })
+        .then((r) => r.data);
+
+      // Replace optimistic entry with confirmed server data
+      if (activeProjectId) {
+        queryClient.setQueryData<ApiPath[]>(
+          queryKeys.paths(activeProjectId),
+          (old = []) =>
+            old.map((p) => (p.id === tempId ? created : p)),
+        );
+        queryClient.setQueryData<ApiPathNode[]>(
+          queryKeys.pathNodes(created.id),
+          createdNodes,
+        );
+        // Clean up the temp-id node cache
+        if (tempId !== created.id) {
+          queryClient.removeQueries({
+            queryKey: queryKeys.pathNodes(tempId),
+          });
+        }
+      }
+    } catch {
+      // Roll back optimistic update on failure
+      if (activeProjectId) {
+        queryClient.setQueryData<ApiPath[]>(
+          queryKeys.paths(activeProjectId),
+          (old = []) => old.filter((p) => p.id !== tempId),
+        );
+        queryClient.removeQueries({ queryKey: queryKeys.pathNodes(tempId) });
+      }
+    }
+  }
+
+  async function extendPath(
+    pathId: string,
+    newNodes: Node[],
+    isClosed: boolean,
+  ) {
+    const existingNodes =
+      queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
+      [];
+    const startPosition = existingNodes.length;
+    const now = new Date().toISOString();
+
+    const apiNodes = newNodes.map((n, i) => ({
+      name: n.name,
+      position: startPosition + i,
+      pathId,
+      point: { lng: n.coords[0], lat: n.coords[1], z: n.z },
+    }));
+
+    // Optimistic: append nodes with temp IDs
+    const tempNodes: ApiPathNode[] = apiNodes.map((n) => ({
+      ...n,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }));
+
+    queryClient.setQueryData<ApiPathNode[]>(
+      queryKeys.pathNodes(pathId),
+      (old = []) => [...old, ...tempNodes],
+    );
+
+    if (isClosed && activeProjectId) {
+      queryClient.setQueryData<ApiPath[]>(
+        queryKeys.paths(activeProjectId),
+        (old = []) =>
+          old.map((p) => (p.id === pathId ? { ...p, isClosed: true } : p)),
+      );
+    }
+
+    try {
+      const created = await api
+        .post<ApiPathNode[]>("/path-nodes/batch", { nodes: apiNodes })
+        .then((r) => r.data);
+
+      // Replace temp nodes with server-confirmed ones
+      queryClient.setQueryData<ApiPathNode[]>(
+        queryKeys.pathNodes(pathId),
+        (old = []) => [
+          ...old.filter((n) => !tempNodes.some((t) => t.id === n.id)),
+          ...created,
+        ],
+      );
+
+      if (isClosed) {
+        await api.patch(`/paths/${pathId}`, { isClosed: true });
+        invalidatePaths();
+      }
+    } catch {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pathNodes(pathId) });
+    }
+  }
+
   function updatePathName(id: string, name: string) {
-    setPaths((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+    updatePathMutation.mutate({ id, name } as Parameters<
+      typeof updatePathMutation.mutate
+    >[0]);
   }
 
   function updatePathColor(id: string, color: string) {
-    setPaths((prev) => prev.map((p) => (p.id === id ? { ...p, color } : p)));
+    updatePathMutation.mutate({ id, color } as Parameters<
+      typeof updatePathMutation.mutate
+    >[0]);
   }
 
   function updatePathWidth(id: string, width: number) {
     const clamped = Math.max(1, Math.min(20, width));
-    setPaths((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, width: clamped } : p)),
-    );
+    updatePathMutation.mutate({ id, width: clamped } as Parameters<
+      typeof updatePathMutation.mutate
+    >[0]);
+  }
+
+  function togglePathVisibility(id: string) {
+    const path = pathsRef.current.find((p) => p.id === id);
+    if (!path) return;
+    updatePathMutation.mutate({ id, isHidden: !path.isHidden } as Parameters<
+      typeof updatePathMutation.mutate
+    >[0]);
   }
 
   function updateNodeName(pathId: string, nodeId: string, name: string) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.id !== pathId
-          ? p
-          : {
-              ...p,
-              nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, name } : n)),
-            },
-      ),
-    );
+    updateNodeMutation.mutate({ id: nodeId, pathId, name } as Parameters<
+      typeof updateNodeMutation.mutate
+    >[0]);
   }
 
   function updateNodeZ(pathId: string, nodeId: string, z: number) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.id !== pathId
-          ? p
-          : {
-              ...p,
-              nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, z } : n)),
-            },
-      ),
-    );
+    const point = { ...getNodePoint(pathId, nodeId), z };
+    updateNodeMutation.mutate({ id: nodeId, pathId, point } as Parameters<
+      typeof updateNodeMutation.mutate
+    >[0]);
   }
 
   function deletePath(id: string) {
-    setPaths((prev) => prev.filter((p) => p.id !== id));
-  }
-
-  // Remove the given nodeIds from a path; deletes the path entirely if fewer
-  // than 2 nodes would remain.
-  function removeNodes(pathId: string, nodeIds: Set<string>) {
-    setPaths((prev) => {
-      const path = prev.find((p) => p.id === pathId);
-      if (!path) return prev;
-      const newNodes = path.nodes.filter((n) => !nodeIds.has(n.id));
-      if (newNodes.length < 2) return prev.filter((p) => p.id !== pathId);
-      const isClosed = path.isClosed && newNodes.length >= 3;
-      return prev.map((p) =>
-        p.id === pathId ? { ...p, nodes: newNodes, isClosed } : p,
+    flushPendingNodeUpdate(id);
+    if (activeProjectId) {
+      queryClient.setQueryData<ApiPath[]>(
+        queryKeys.paths(activeProjectId),
+        (old = []) => old.filter((p) => p.id !== id),
       );
-    });
+    }
+    api.delete(`/paths/${id}`).catch(() => invalidatePaths());
   }
 
-  // Move nodes by applying startCoords + (dx, dy). Called on every onDrag
-  // frame; startCoords is snapshotted at drag start to avoid drift.
+  function removeNodes(pathId: string, nodeIds: Set<string>) {
+    const nodes =
+      queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
+      [];
+    const remaining = nodes.filter((n) => !nodeIds.has(n.id));
+
+    if (remaining.length < 2) {
+      deletePath(pathId);
+      return;
+    }
+
+    // Optimistic
+    queryClient.setQueryData<ApiPathNode[]>(
+      queryKeys.pathNodes(pathId),
+      remaining,
+    );
+    if (activeProjectId) {
+      queryClient.setQueryData<ApiPath[]>(
+        queryKeys.paths(activeProjectId),
+        (old = []) =>
+          old.map((p) =>
+            p.id === pathId
+              ? { ...p, isClosed: p.isClosed && remaining.length >= 3 }
+              : p,
+          ),
+      );
+    }
+
+    Promise.all([...nodeIds].map((nid) => api.delete(`/path-nodes/${nid}`))).catch(
+      () => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.pathNodes(pathId),
+        });
+      },
+    );
+  }
+
+  // Called on every onDrag frame — updates React Query cache only, no API call.
   function dragNodes(
     pathId: string,
     startCoords: Map<string, [number, number]>,
     dx: number,
     dy: number,
   ) {
-    setPaths((prev) =>
-      prev.map((p) => {
-        if (p.id !== pathId) return p;
-        return {
-          ...p,
-          nodes: p.nodes.map((n) => {
-            const start = startCoords.get(n.id);
-            if (!start) return n;
-            return {
-              ...n,
-              coords: [start[0] + dx, start[1] + dy] as [number, number],
+    queryClient.setQueryData<ApiPathNode[]>(
+      queryKeys.pathNodes(pathId),
+      (old = []) =>
+        old.map((n) => {
+          const start = startCoords.get(n.id);
+          if (!start) return n;
+          return {
+            ...n,
+            point: { ...n.point, lng: start[0] + dx, lat: start[1] + dy },
+          };
+        }),
+    );
+  }
+
+  function flushPendingNodeUpdate(pathId: string) {
+    const entry = pendingNodeUpdatesRef.current.get(pathId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingNodeUpdatesRef.current.delete(pathId);
+    batchUpdateNodesMutation.mutate(entry.nodes);
+  }
+
+  function cancelPendingNodeUpdate(pathId: string) {
+    const entry = pendingNodeUpdatesRef.current.get(pathId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    pendingNodeUpdatesRef.current.delete(pathId);
+  }
+
+  function queuePendingNodeUpdate(
+    pathId: string,
+    nodes: { id: string; point: ApiPathNode["point"] }[],
+  ) {
+    const existing = pendingNodeUpdatesRef.current.get(pathId);
+    if (existing) {
+      clearTimeout(existing.timer);
+    }
+    const timer = setTimeout(() => {
+      flushPendingNodeUpdate(pathId);
+    }, NODE_WRITE_DEBOUNCE_MS);
+    pendingNodeUpdatesRef.current.set(pathId, { timer, nodes });
+  }
+
+  useEffect(() => {
+    return () => {
+      for (const pathId of Array.from(pendingNodeUpdatesRef.current.keys())) {
+        flushPendingNodeUpdate(pathId);
+      }
+    };
+  }, []);
+
+  // Call from onDragEnd to persist the final node positions to the server.
+  function persistDraggedNodes(pathId: string) {
+    const nodes =
+      queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
+      [];
+    if (nodes.length === 0) {
+      cancelPendingNodeUpdate(pathId);
+      return;
+    }
+    queuePendingNodeUpdate(
+      pathId,
+      nodes.map((n) => ({ id: n.id, point: n.point })),
+    );
+  }
+
+  async function subdivideEdge(
+    pathId: string,
+    nodeId1: string,
+    nodeId2: string,
+  ) {
+    const path = pathsRef.current.find((p) => p.id === pathId);
+    if (!path) return;
+
+    const updated = insertSubdivisionNode(path, nodeId1, nodeId2);
+    const serverNodes =
+      queryClient.getQueryData<ApiPathNode[]>(queryKeys.pathNodes(pathId)) ??
+      [];
+    const now = new Date().toISOString();
+
+    // Optimistic: show updated node order immediately
+    queryClient.setQueryData<ApiPathNode[]>(
+      queryKeys.pathNodes(pathId),
+      updated.nodes.map((n, i) => {
+        const existing = serverNodes.find((s) => s.id === n.id);
+        return existing
+          ? { ...existing, position: i }
+          : {
+              id: n.id,
+              name: n.name,
+              position: i,
+              pathId,
+              point: { lng: n.coords[0], lat: n.coords[1], z: n.z },
+              createdAt: now,
+              updatedAt: now,
+              deletedAt: null,
             };
-          }),
-        };
       }),
     );
-  }
 
-  function subdivideEdge(pathId: string, nodeId1: string, nodeId2: string) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.id !== pathId ? p : insertSubdivisionNode(p, nodeId1, nodeId2),
-      ),
-    );
-  }
-
-  function togglePathVisibility(id: string) {
-    setPaths((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, isHidden: !p.isHidden } : p)),
-    );
+    try {
+      // Delete all existing server nodes, then re-create in correct order
+      // (avoids unique constraint issues with position reordering)
+      await Promise.all(serverNodes.map((n) => api.delete(`/path-nodes/${n.id}`)));
+      await api.post("/path-nodes/batch", {
+        nodes: updated.nodes.map((n, i) => ({
+          name: n.name,
+          position: i,
+          pathId,
+          point: { lng: n.coords[0], lat: n.coords[1], z: n.z },
+        })),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pathNodes(pathId) });
+    } catch {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pathNodes(pathId) });
+    }
   }
 
   function movePathsToLayer(fromLayerId: string, toLayerId: string) {
-    setPaths((prev) =>
-      prev.map((p) =>
-        p.layerId === fromLayerId ? { ...p, layerId: toLayerId } : p,
-      ),
+    if (!activeProjectId) return;
+    const toMove = pathsRef.current.filter((p) => p.layerId === fromLayerId);
+
+    queryClient.setQueryData<ApiPath[]>(
+      queryKeys.paths(activeProjectId),
+      (old = []) =>
+        old.map((p) =>
+          p.layerId === fromLayerId ? { ...p, layerId: toLayerId } : p,
+        ),
     );
+
+    Promise.all(
+      toMove.map((p) => api.patch(`/paths/${p.id}`, { layerId: toLayerId })),
+    ).catch(() => invalidatePaths());
   }
 
   return {
@@ -198,6 +561,7 @@ export function usePaths() {
     deletePath,
     removeNodes,
     dragNodes,
+    persistDraggedNodes,
     subdivideEdge,
     togglePathVisibility,
     movePathsToLayer,
