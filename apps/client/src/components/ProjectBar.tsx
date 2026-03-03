@@ -10,6 +10,7 @@ interface ProjectBarProps {
   onCreateProject: (name: string) => void;
   onRenameProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
+  onShareViewState: () => Promise<boolean>;
 }
 
 export default function ProjectBar({
@@ -19,11 +20,13 @@ export default function ProjectBar({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
+  onShareViewState,
 }: ProjectBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [isCopied, setIsCopied] = useState(false);
 
   function handleCreate() {
     const name = newProjectName.trim();
@@ -43,6 +46,13 @@ export default function ProjectBar({
       onRenameProject(renamingId, renameValue.trim());
     }
     setRenamingId(null);
+  }
+
+  async function handleShare() {
+    const copied = await onShareViewState();
+    if (!copied) return;
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 1200);
   }
 
   const panelStyle: React.CSSProperties = {
@@ -67,30 +77,66 @@ export default function ProjectBar({
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
-      {/* Trigger */}
-      <button
-        onClick={() => setIsOpen((v) => !v)}
-        style={{
-          ...panelStyle,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 14px",
-          fontSize: 13,
-          fontWeight: 600,
-          cursor: "pointer",
-          minWidth: 180,
-          textAlign: "left",
-        }}
-      >
-        <span style={{ color: "#3a7bd5", fontSize: 14, flexShrink: 0 }}>◈</span>
-        <span style={{ flex: 1 }}>
-          {activeProject ? activeProject.name : "Select project…"}
-        </span>
-        <span style={{ color: "#555", fontSize: 10, flexShrink: 0 }}>
-          {isOpen ? "▲" : "▾"}
-        </span>
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Trigger */}
+        <button
+          onClick={() => setIsOpen((v) => !v)}
+          style={{
+            ...panelStyle,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 14px",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            minWidth: 180,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ color: "#3a7bd5", fontSize: 14, flexShrink: 0 }}>◈</span>
+          <span style={{ flex: 1 }}>
+            {activeProject ? activeProject.name : "Select project…"}
+          </span>
+          <span style={{ color: "#555", fontSize: 10, flexShrink: 0 }}>
+            {isOpen ? "▲" : "▾"}
+          </span>
+        </button>
+
+        <button
+          onClick={handleShare}
+          title="Copy shareable view link"
+          aria-label="Copy shareable view link"
+          style={{
+            ...panelStyle,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 38,
+            height: 38,
+            padding: 0,
+            cursor: "pointer",
+            color: isCopied ? "#3a7bd5" : "#ddd",
+          }}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            width="16"
+            height="16"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13.19 8.688a4.5 4.5 0 0 1 6.364 6.364l-2.636 2.636a4.5 4.5 0 0 1-6.364-6.364m2.636-2.636 2.636-2.636a4.5 4.5 0 1 0-6.364-6.364L6.826 2.324a4.5 4.5 0 0 0 6.364 6.364"
+            />
+          </svg>
+        </button>
+      </div>
 
       {isOpen && (
         <>

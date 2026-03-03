@@ -35,12 +35,15 @@ import LayersPanel from "./LayersPanel";
 import ProjectBar from "./ProjectBar";
 import NodeContextMenu from "./NodeContextMenu";
 import { areNodesAdjacent } from "@/lib/geometry-operations/subdivide-path";
-import { loadFromStorage, saveToStorage } from "@/lib/storage";
+import {
+  useShareableViewState,
+  type IMapViewState,
+} from "@/hooks/useShareableViewState";
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const SNAP_RADIUS_PX = 20;
 
-const INITIAL_VIEW_STATE = {
+const INITIAL_VIEW_STATE: IMapViewState = {
   longitude: -79.3874715594294,
   latitude: 43.64118809154064,
   zoom: 14,
@@ -62,6 +65,12 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     renameProject,
     deleteProject,
   } = useProjects();
+  const { initialViewState, handleViewStateChange, shareViewStateLink } =
+    useShareableViewState({
+      fallbackViewState: INITIAL_VIEW_STATE,
+      activeProjectId,
+      setActiveProject,
+    });
 
   const {
     layers,
@@ -158,7 +167,6 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     setSnapIsFirstNode(false);
     setEditingPathId(null);
     setSelectedNodeIds(new Set());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
 
   // Sync activeLayerId whenever layers load or change — also covers the initial
@@ -169,8 +177,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     if (pLayers.length > 0 && !pLayers.find((l) => l.id === activeLayerId)) {
       setActiveLayerId(pLayers[0].id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjectId, layers]);
+  }, [activeProjectId, activeLayerId, layers]);
 
   // Clear editingPathId if the path was deleted elsewhere
   useEffect(() => {
@@ -669,7 +676,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
       onContextMenu={handleContextMenu}
     >
       <DeckGL
-        initialViewState={loadFromStorage("view-state", INITIAL_VIEW_STATE)}
+        initialViewState={initialViewState}
         controller={!isDraggingNode}
         layers={deckLayers}
         onClick={handleClick as (info: PickingInfo) => void}
@@ -682,10 +689,9 @@ export default function DeckMap({ geoData }: DeckMapProps) {
               : "grab"
         }
         style={{ position: "absolute", inset: "0" }}
-        onViewStateChange={({ viewState }) => {
-          saveToStorage("view-state", viewState);
-          return;
-        }}
+        onViewStateChange={({ viewState }) =>
+          handleViewStateChange(viewState as IMapViewState)
+        }
       >
         <MapGL mapStyle={MAP_STYLE} />
       </DeckGL>
@@ -736,6 +742,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         onCreateProject={handleCreateProject}
         onRenameProject={renameProject}
         onDeleteProject={handleDeleteProject}
+        onShareViewState={shareViewStateLink}
       />
 
       {activeProject && (
