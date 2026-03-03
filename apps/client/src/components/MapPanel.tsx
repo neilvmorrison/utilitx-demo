@@ -117,7 +117,7 @@ export default function MapPanel({
           marginBottom: isCollapsed ? 0 : 12,
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Line Paths</span>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Assets</span>
         <button
           onClick={() => setIsCollapsed((v) => !v)}
           style={{

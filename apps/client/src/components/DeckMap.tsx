@@ -65,12 +65,16 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     renameProject,
     deleteProject,
   } = useProjects();
-  const { initialViewState, handleViewStateChange, shareViewStateLink } =
-    useShareableViewState({
-      fallbackViewState: INITIAL_VIEW_STATE,
-      activeProjectId,
-      setActiveProject,
-    });
+  const {
+    initialViewState,
+    handleViewStateChange,
+    getShareViewStateLink,
+    copyShareViewStateLink,
+  } = useShareableViewState({
+    fallbackViewState: INITIAL_VIEW_STATE,
+    activeProjectId,
+    setActiveProject,
+  });
 
   const {
     layers,
@@ -742,7 +746,8 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         onCreateProject={handleCreateProject}
         onRenameProject={renameProject}
         onDeleteProject={handleDeleteProject}
-        onShareViewState={shareViewStateLink}
+        onGetShareViewStateLink={getShareViewStateLink}
+        onCopyShareViewState={copyShareViewStateLink}
       />
 
       {activeProject && (

@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import type { Project } from "@/hooks/useProjects";
+import Popover from "@/components/ui/disclosure/Popover";
 
-interface ProjectBarProps {
+interface IEmailRecipient {
+  id: string;
+  email: string;
+}
+
+interface IProjectBarProps {
   projects: Project[];
   activeProject: Project | null;
   onSelectProject: (id: string) => void;
   onCreateProject: (name: string) => void;
   onRenameProject: (id: string, name: string) => void;
   onDeleteProject: (id: string) => void;
-  onShareViewState: () => Promise<boolean>;
+  onGetShareViewStateLink: () => string | null;
+  onCopyShareViewState: () => Promise<boolean>;
 }
 
 export default function ProjectBar({
@@ -20,12 +27,16 @@ export default function ProjectBar({
   onCreateProject,
   onRenameProject,
   onDeleteProject,
-  onShareViewState,
-}: ProjectBarProps) {
+  onGetShareViewStateLink,
+  onCopyShareViewState,
+}: IProjectBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [isSharePopoverOpen, setIsSharePopoverOpen] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailRecipients, setEmailRecipients] = useState<IEmailRecipient[]>([]);
   const [isCopied, setIsCopied] = useState(false);
 
   function handleCreate() {
@@ -48,8 +59,23 @@ export default function ProjectBar({
     setRenamingId(null);
   }
 
-  async function handleShare() {
-    const copied = await onShareViewState();
+  function addEmailRecipient() {
+    const trimmed = emailInput.trim();
+    if (!trimmed || !trimmed.includes("@")) return;
+    if (emailRecipients.some((recipient) => recipient.email === trimmed)) return;
+    setEmailRecipients((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), email: trimmed },
+    ]);
+    setEmailInput("");
+  }
+
+  function removeEmailRecipient(id: string) {
+    setEmailRecipients((prev) => prev.filter((recipient) => recipient.id !== id));
+  }
+
+  async function handleCopyShareLink() {
+    const copied = await onCopyShareViewState();
     if (!copied) return;
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 1200);
@@ -103,39 +129,180 @@ export default function ProjectBar({
           </span>
         </button>
 
-        <button
-          onClick={handleShare}
-          title="Copy shareable view link"
-          aria-label="Copy shareable view link"
-          style={{
-            ...panelStyle,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 38,
-            height: 38,
-            padding: 0,
-            cursor: "pointer",
-            color: isCopied ? "#3a7bd5" : "#ddd",
-          }}
+        <Popover
+          isOpen={isSharePopoverOpen}
+          onClose={() => setIsSharePopoverOpen(false)}
+          trigger={
+            <button
+              onClick={() => setIsSharePopoverOpen((prev) => !prev)}
+              title="Share this view"
+              aria-label="Share this view"
+              style={{
+                ...panelStyle,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 38,
+                height: 38,
+                padding: 0,
+                cursor: "pointer",
+                color: isCopied ? "#3a7bd5" : "#ddd",
+              }}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M7 12a3 3 0 1 0 2.83-2H14.2a3 3 0 1 0 0 4H9.83A3 3 0 1 0 7 12z"
+                />
+              </svg>
+            </button>
+          }
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            width="16"
-            height="16"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13.19 8.688a4.5 4.5 0 0 1 6.364 6.364l-2.636 2.636a4.5 4.5 0 0 1-6.364-6.364m2.636-2.636 2.636-2.636a4.5 4.5 0 1 0-6.364-6.364L6.826 2.324a4.5 4.5 0 0 0 6.364 6.364"
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
+              Share current view
+            </div>
+
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addEmailRecipient();
+                  }
+                }}
+                placeholder="Add email address"
+                style={{
+                  flex: 1,
+                  background: "rgba(255,255,255,0.07)",
+                  border: "1px solid #2a2e3d",
+                  borderRadius: 5,
+                  color: "#ddd",
+                  fontSize: 12,
+                  padding: "6px 8px",
+                  outline: "none",
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                }}
+              />
+              <button
+                onClick={addEmailRecipient}
+                style={{
+                  background: "#1e5fa8",
+                  border: "none",
+                  borderRadius: 5,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "0 10px",
+                }}
+              >
+                Add
+              </button>
+            </div>
+
+            {emailRecipients.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {emailRecipients.map((recipient) => (
+                  <span
+                    key={recipient.id}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 999,
+                      color: "#ddd",
+                      fontSize: 11,
+                      padding: "3px 8px",
+                    }}
+                  >
+                    {recipient.email}
+                    <button
+                      onClick={() => removeEmailRecipient(recipient.id)}
+                      aria-label={`Remove ${recipient.email}`}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#888",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <input
+              readOnly
+              value={onGetShareViewStateLink() ?? ""}
+              style={{
+                width: "100%",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid #2a2e3d",
+                borderRadius: 5,
+                color: "#9ea8b8",
+                fontSize: 11,
+                padding: "6px 8px",
+                outline: "none",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              }}
             />
-          </svg>
-        </button>
+
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <button
+                disabled
+                style={{
+                  background: "rgba(58,123,213,0.45)",
+                  border: "none",
+                  borderRadius: 5,
+                  color: "#fff",
+                  cursor: "not-allowed",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "6px 10px",
+                  opacity: 0.7,
+                }}
+              >
+                Email link (UI only)
+              </button>
+              <button
+                onClick={handleCopyShareLink}
+                style={{
+                  background: "#1e5fa8",
+                  border: "none",
+                  borderRadius: 5,
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "6px 10px",
+                }}
+              >
+                {isCopied ? "Copied" : "Copy link"}
+              </button>
+            </div>
+          </div>
+        </Popover>
       </div>
 
       {isOpen && (

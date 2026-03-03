@@ -37,3 +37,6 @@ export type { FileUploadProps, FileUploadMode } from "./forms/FileUpload";
 // Disclosure
 export { default as Accordion } from "./disclosure/Accordion";
 export type { AccordionProps, AccordionItemProps } from "./disclosure/Accordion";
+
+export { default as Popover } from "./disclosure/Popover";
+export type { IPopoverProps } from "./disclosure/Popover";

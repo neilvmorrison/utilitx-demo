@@ -84,8 +84,8 @@ export function useShareableViewState({
     saveToStorage(STORAGE_KEY_VIEW_STATE, viewState);
   }, []);
 
-  const shareViewStateLink = useCallback(async (): Promise<boolean> => {
-    if (typeof window === "undefined") return false;
+  const getShareViewStateLink = useCallback((): string | null => {
+    if (typeof window === "undefined") return null;
     const currentViewState = viewStateRef.current;
     const params = new URLSearchParams(window.location.search);
     params.set(QUERY_PARAM_LONGITUDE, String(currentViewState.longitude));
@@ -100,21 +100,27 @@ export function useShareableViewState({
       params.delete(QUERY_PARAM_PROJECT_ID);
     }
 
-    const shareUrl =
+    return (
       `${window.location.origin}${window.location.pathname}` +
-      `?${params.toString()}${window.location.hash}`;
+      `?${params.toString()}${window.location.hash}`
+    );
+  }, [activeProjectId]);
 
+  const copyShareViewStateLink = useCallback(async (): Promise<boolean> => {
+    const shareUrl = getShareViewStateLink();
+    if (!shareUrl) return false;
     try {
       await navigator.clipboard.writeText(shareUrl);
       return true;
     } catch {
       return false;
     }
-  }, [activeProjectId]);
+  }, [getShareViewStateLink]);
 
   return {
     initialViewState,
     handleViewStateChange,
-    shareViewStateLink,
+    getShareViewStateLink,
+    copyShareViewStateLink,
   };
 }

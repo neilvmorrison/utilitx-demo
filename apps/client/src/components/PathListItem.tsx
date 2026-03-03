@@ -1,6 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import type { DrawnPath } from "@/hooks/usePaths";
+import {
+  computeClosedPathAreaMeters,
+  computeOpenPathLengthMeters,
+  formatAreaMeters,
+  formatLengthMeters,
+} from "@/lib/geometry/measurements";
 
 const ghostInputStyle: React.CSSProperties = {
   background: "transparent",
@@ -53,6 +60,15 @@ export default function PathListItem({
   onDelete,
   onToggleHidden,
 }: PathListItemProps) {
+  const formattedMeasurement = useMemo(() => {
+    if (path.isClosed) {
+      return formatAreaMeters(computeClosedPathAreaMeters(path.nodes));
+    }
+    return formatLengthMeters(computeOpenPathLengthMeters(path.nodes));
+  }, [path.isClosed, path.nodes]);
+
+  const measurementTitle = path.isClosed ? "Area" : "Length";
+
   return (
     <div
       style={{
@@ -95,21 +111,24 @@ export default function PathListItem({
             (e.currentTarget.style.borderBottomColor = "transparent")
           }
         />
-        {path.isClosed && (
-          <span
-            style={{
-              fontSize: 9,
-              color: "#5a9",
-              background: "rgba(90,170,100,0.15)",
-              border: "1px solid rgba(90,170,100,0.3)",
-              borderRadius: 3,
-              padding: "1px 4px",
-              flexShrink: 0,
-            }}
-          >
-            area
-          </span>
-        )}
+        <span
+          style={{
+            fontSize: 9,
+            color: path.isClosed ? "#5a9" : "#8bc7ff",
+            background: path.isClosed
+              ? "rgba(90,170,100,0.15)"
+              : "rgba(139,199,255,0.12)",
+            border: path.isClosed
+              ? "1px solid rgba(90,170,100,0.3)"
+              : "1px solid rgba(139,199,255,0.4)",
+            borderRadius: 3,
+            padding: "1px 4px",
+            flexShrink: 0,
+          }}
+          title={`${measurementTitle} in meters`}
+        >
+          {formattedMeasurement}
+        </span>
         <input
           type="color"
           value={path.color}
