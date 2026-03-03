@@ -1,13 +1,17 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, getTableColumns, isNull } from 'drizzle-orm';
 import { layers, paths } from '@utilitix/db';
 import { DRIZZLE, DrizzleDB } from '../drizzle';
 import { CreatePathDto } from './dto/create-path.dto';
 import { UpdatePathDto } from './dto/update-path.dto';
+import { PathsRepository } from '../database/paths.repository';
 
 @Injectable()
 export class PathsService {
-  constructor(@Inject(DRIZZLE) private readonly db: DrizzleDB) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: DrizzleDB,
+    private readonly repo: PathsRepository,
+  ) {}
 
   async findAll(layerId?: string, projectId?: string) {
     if (projectId) {
@@ -23,46 +27,22 @@ export class PathsService {
         .from(paths)
         .where(and(eq(paths.layerId, layerId), isNull(paths.deletedAt)));
     }
-    return this.db
-      .select()
-      .from(paths)
-      .where(isNull(paths.deletedAt));
+    return this.repo.findAll();
   }
 
   async findOne(id: string) {
-    const [row] = await this.db
-      .select()
-      .from(paths)
-      .where(and(isNull(paths.deletedAt), eq(paths.id, id)));
-    if (!row) throw new NotFoundException(`Path ${id} not found`);
-    return row;
+    return this.repo.findOne(id);
   }
 
   async create(dto: CreatePathDto) {
-    const [row] = await this.db
-      .insert(paths)
-      .values(dto)
-      .returning();
-    return row;
+    return this.repo.create(dto);
   }
 
   async update(id: string, dto: UpdatePathDto) {
-    const [row] = await this.db
-      .update(paths)
-      .set({ ...dto, updatedAt: new Date() })
-      .where(eq(paths.id, id))
-      .returning();
-    if (!row) throw new NotFoundException(`Path ${id} not found`);
-    return row;
+    return this.repo.update(id, dto);
   }
 
   async remove(id: string) {
-    const [row] = await this.db
-      .update(paths)
-      .set({ deletedAt: new Date() })
-      .where(eq(paths.id, id))
-      .returning();
-    if (!row) throw new NotFoundException(`Path ${id} not found`);
-    return row;
+    return this.repo.remove(id);
   }
 }
