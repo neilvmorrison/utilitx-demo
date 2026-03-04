@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --filter @utilitix/db db:generate)",
+      "Bash(pnpm --filter @utilitix/db db:push)",
+      "Bash(pnpm --filter @utilitix/db build)",
+      "Bash(pnpm --filter client build)",
+      "Bash(pnpm --filter client exec tsc --noEmit)"
+    ]
+  }
+}

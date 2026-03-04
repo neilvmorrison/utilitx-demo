@@ -19,6 +19,8 @@ interface IProjectBarProps {
   onDeleteProject: (id: string) => void;
   onGetShareViewStateLink: () => string | null;
   onCopyShareViewState: () => Promise<boolean>;
+  isFilesPanelOpen?: boolean;
+  onToggleFilesPanel?: () => void;
 }
 
 export default function ProjectBar({
@@ -30,6 +32,8 @@ export default function ProjectBar({
   onDeleteProject,
   onGetShareViewStateLink,
   onCopyShareViewState,
+  isFilesPanelOpen,
+  onToggleFilesPanel,
 }: IProjectBarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -298,6 +302,45 @@ export default function ProjectBar({
             </div>
           </div>
         </Popover>
+
+        {activeProject && onToggleFilesPanel && (
+          <button
+            onClick={onToggleFilesPanel}
+            title="Project files"
+            aria-label="Project files"
+            style={{
+              ...panelStyle,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 38,
+              height: 38,
+              padding: 0,
+              cursor: "pointer",
+              color: isFilesPanelOpen ? "#3a7bd5" : "#ddd",
+              background: isFilesPanelOpen
+                ? "rgba(30, 95, 168, 0.35)"
+                : panelStyle.background,
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              width="16"
+              height="16"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"
+              />
+            </svg>
+          </button>
+        )}
       </div>
 
       {isOpen && (

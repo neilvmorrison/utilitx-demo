@@ -16,6 +16,7 @@ export interface FileUploadProps {
   helperText?: string;
   error?: string;
   disabled?: boolean;
+  showFileList?: boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -33,6 +34,7 @@ export default function FileUpload({
   helperText,
   error,
   disabled = false,
+  showFileList = true,
 }: FileUploadProps) {
   const instanceId = useId();
   const helperId = `${instanceId}-helper`;
@@ -46,9 +48,12 @@ export default function FileUpload({
     if (!incoming) return;
     const arr = Array.from(incoming);
     const filtered = maxSize ? arr.filter((f) => f.size <= maxSize) : arr;
-    const next = mode === "single" ? filtered.slice(0, 1) : [...files, ...filtered];
-    setFiles(next);
-    onFilesChange(next);
+    const newSelection = mode === "single" ? filtered.slice(0, 1) : filtered;
+    const nextState = mode === "single" ? newSelection : [...files, ...newSelection];
+    setFiles(nextState);
+    // Only pass the newly added files to the consumer so uploads
+    // don't re-send previously selected files.
+    onFilesChange(newSelection);
   }
 
   function removeFile(index: number) {
@@ -90,7 +95,7 @@ export default function FileUpload({
   }
 
   const dropZoneClasses = [
-    "flex flex-col items-center justify-center gap-3 w-full min-h-[120px]",
+    "flex flex-col items-center justify-center gap-3 w-full min-h-[120px] p-2",
     "rounded-[--radius-lg] border-2 border-dashed",
     "cursor-pointer transition-colors duration-150",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[--color-primary-500]",
@@ -137,23 +142,23 @@ export default function FileUpload({
         />
 
         <Icon name="upload" size="lg" />
-        <Text as="span" size="sm" color="secondary">
+        <Text as="span" size="sm" color="secondary" className="text-center">
           Drop {mode === "multi" ? "files" : "a file"} here or{" "}
           <span className="text-[--color-primary-500] font-medium">click to browse</span>
         </Text>
         {accept && (
-          <Text as="span" size="xs" color="tertiary">
+          <Text as="span" size="xs" color="tertiary" className="text-center">
             Accepted: {accept}
           </Text>
         )}
         {maxSize && (
-          <Text as="span" size="xs" color="tertiary">
+          <Text as="span" size="xs" color="tertiary" className="text-center">
             Max size: {formatBytes(maxSize)}
           </Text>
         )}
       </div>
 
-      {files.length > 0 && (
+      {showFileList && files.length > 0 && (
         <ul className="flex flex-col gap-1">
           {files.map((file, i) => (
             <li
