@@ -193,6 +193,30 @@ export const pathNodes = pgTable(
   ],
 );
 
+// Files (documents / images) attached to a project, stored in S3.
+// The s3Key points to the object; presigned URLs are generated at request time.
+export const projectFiles = pgTable(
+  'project_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id),
+    uploadedById: uuid('uploaded_by_id')
+      .notNull()
+      .references(() => userProfiles.id),
+    fileName: text('file_name').notNull(),
+    s3Key: text('s3_key').notNull().unique(),
+    mimeType: varchar('mime_type', { length: 255 }).notNull(),
+    fileSize: integer('file_size').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index('project_files_project_id_idx').on(table.projectId),
+    index('project_files_uploaded_by_id_idx').on(table.uploadedById),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
@@ -220,6 +244,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     references: [organizations.id],
   }),
   layers: many(layers),
+  files: many(projectFiles),
 }));
 
 export const layersRelations = relations(layers, ({ one, many }) => ({
@@ -242,5 +267,16 @@ export const pathNodesRelations = relations(pathNodes, ({ one }) => ({
   path: one(paths, {
     fields: [pathNodes.pathId],
     references: [paths.id],
+  }),
+}));
+
+export const projectFilesRelations = relations(projectFiles, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectFiles.projectId],
+    references: [projects.id],
+  }),
+  uploadedBy: one(userProfiles, {
+    fields: [projectFiles.uploadedById],
+    references: [userProfiles.id],
   }),
 }));

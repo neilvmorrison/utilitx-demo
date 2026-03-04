@@ -44,3 +44,26 @@ export interface ApiPathNode {
   updatedAt: string;
   deletedAt: string | null;
 }
+
+export interface ApiProjectFile {
+  id: string;
+  projectId: string;
+  uploadedById: string;
+  fileName: string;
+  s3Key: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface PresignUploadResponse {
+  uploadUrl: string;
+  file: ApiProjectFile;
+}
+
+export interface PresignDownloadResponse {
+  downloadUrl: string;
+  file: ApiProjectFile;
+}

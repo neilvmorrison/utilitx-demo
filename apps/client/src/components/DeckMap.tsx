@@ -7,6 +7,8 @@ import { usePaths } from "@/hooks/usePaths";
 import type { Node } from "@/lib/geometry/types";
 import { useLayers } from "@/hooks/useLayers";
 import { useProjects } from "@/hooks/useProjects";
+import { useProjectFiles } from "@/hooks/useProjectFiles";
+import ProjectFilesPanel from "./ProjectFilesPanel";
 import { DeckGL } from "@deck.gl/react";
 import { Map as MapGL } from "react-map-gl/maplibre";
 import type { PickingInfo } from "@deck.gl/core";
@@ -106,6 +108,14 @@ export default function DeckMap({ geoData }: DeckMapProps) {
     movePathsToLayer,
   } = usePaths(activeProjectId);
 
+  const {
+    files: projectFiles,
+    isUploading,
+    uploadFiles,
+    deleteFile,
+    getDownloadUrl,
+  } = useProjectFiles(activeProjectId);
+
   // Drawing state
   const [activePath, setActivePath] = useState<Node[]>([]);
   const [hoverCoord, setHoverCoord] = useState<[number, number] | null>(null);
@@ -140,6 +150,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
   // Layers panel state
   const [activeLayerId, setActiveLayerId] = useState<string>("");
   const [isLayersPanelOpen, setIsLayersPanelOpen] = useState(false);
+  const [isFilesPanelOpen, setIsFilesPanelOpen] = useState(false);
 
   // Refs for stable access inside drag/keyboard callbacks
   const editingPathIdRef = useRef<string | null>(null);
@@ -748,7 +759,23 @@ export default function DeckMap({ geoData }: DeckMapProps) {
         onDeleteProject={handleDeleteProject}
         onGetShareViewStateLink={getShareViewStateLink}
         onCopyShareViewState={copyShareViewStateLink}
+        isFilesPanelOpen={isFilesPanelOpen}
+        onToggleFilesPanel={() => setIsFilesPanelOpen((v) => !v)}
       />
+
+      {isFilesPanelOpen && activeProject && (
+        <ProjectFilesPanel
+          files={projectFiles}
+          isUploading={isUploading}
+          onUploadFiles={uploadFiles}
+          onDeleteFile={deleteFile}
+          onDownloadFile={async (fileId) => {
+            const url = await getDownloadUrl(fileId);
+            window.open(url, "_blank");
+          }}
+          getDownloadUrl={getDownloadUrl}
+        />
+      )}
 
       {activeProject && (
         <>
@@ -825,6 +852,7 @@ export default function DeckMap({ geoData }: DeckMapProps) {
               onDeleteLayer={handleDeleteLayer}
             />
           )}
+
         </>
       )}
     </div>
